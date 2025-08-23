@@ -1,4 +1,4 @@
-import ResourceForkParser from './components/ResourceForkParser'
+import ResourceForkParser from './components/ResourceForkParserRedesigned'
 import './App.css'
 
 function App() {
