@@ -168,6 +168,18 @@ export default function ResourceForkParser() {
     ));
   }, []);
 
+  const validateStructSpec = useCallback((spec: string): string | null => {
+    if (!spec.trim()) return null;
+    
+    // Basic validation for struct format characters
+    const validChars = /^[LlhHfBbcCxsp0-9\s]*\+?$/;
+    if (!validChars.test(spec)) {
+      return 'Invalid format characters. Use L, h, H, f, B, x, s, p and numbers only.';
+    }
+    
+    return null;
+  }, []);
+
   const removeCustomSpec = useCallback((id: string) => {
     setCustomSpecs(prev => prev.filter(spec => spec.id !== id));
   }, []);
@@ -227,15 +239,20 @@ export default function ResourceForkParser() {
           {/* Settings */}
           <div className="bg-gray-50 p-4 rounded-lg">
             <h2 className="text-xl font-semibold mb-4">Settings</h2>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={useOttoSpecs}
-                onChange={(e) => setUseOttoSpecs(e.target.checked)}
-                className="mr-2"
-              />
-              Use Otto Matic Default Specs
-            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={useOttoSpecs}
+                  onChange={(e) => setUseOttoSpecs(e.target.checked)}
+                  className="mr-2"
+                />
+                Use Otto Matic Default Specs
+              </label>
+              <div className="text-sm text-gray-600 ml-6">
+                Includes predefined struct specs for Otto Matic terrain files
+              </div>
+            </div>
           </div>
 
           {/* Results */}
@@ -292,18 +309,27 @@ export default function ResourceForkParser() {
                         maxLength={4}
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Struct Spec
-                      </label>
-                      <input
-                        type="text"
-                        value={spec.spec}
-                        onChange={(e) => updateCustomSpec(spec.id, 'spec', e.target.value)}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        placeholder="e.g. L5i3f5i40x"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Struct Spec
+                    </label>
+                    <input
+                      type="text"
+                      value={spec.spec}
+                      onChange={(e) => updateCustomSpec(spec.id, 'spec', e.target.value)}
+                      className={`w-full px-2 py-1 border rounded text-sm ${
+                        spec.spec && validateStructSpec(spec.spec) 
+                          ? 'border-red-300 bg-red-50' 
+                          : 'border-gray-300'
+                      }`}
+                      placeholder="e.g. L5i3f5i40x"
+                    />
+                    {spec.spec && validateStructSpec(spec.spec) && (
+                      <div className="text-xs text-red-600 mt-1">
+                        {validateStructSpec(spec.spec)}
+                      </div>
+                    )}
+                  </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -332,13 +358,23 @@ export default function ResourceForkParser() {
               <h4 className="font-semibold text-blue-800 mb-2">Format Characters:</h4>
               <div className="text-blue-700 space-y-1">
                 <div><code>L</code> - Unsigned long (4 bytes)</div>
+                <div><code>l</code> - Signed long (4 bytes)</div>
                 <div><code>i</code> - Signed int (4 bytes)</div>
                 <div><code>h</code> - Signed short (2 bytes)</div>
                 <div><code>H</code> - Unsigned short (2 bytes)</div>
                 <div><code>f</code> - Float (4 bytes)</div>
                 <div><code>B</code> - Unsigned byte (1 byte)</div>
+                <div><code>b</code> - Signed byte (1 byte)</div>
                 <div><code>x</code> - Padding byte</div>
+                <div><code>s</code> - String</div>
+                <div><code>p</code> - Pascal string</div>
                 <div><code>+</code> - Indicates array/multiple items</div>
+                <div className="mt-2 pt-2 border-t border-blue-200">
+                  <strong>Examples:</strong>
+                  <div><code>L5i3f</code> - Long + 5 ints + 3 floats</div>
+                  <div><code>H2x</code> - Short + 2 padding bytes</div>
+                  <div><code>200f</code> - 200 floats</div>
+                </div>
               </div>
             </div>
           </div>
