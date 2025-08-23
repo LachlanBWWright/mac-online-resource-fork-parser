@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { saveToJson, saveFromJson } from '../lib/rsrcdump/rsrcdump';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { ChevronDown, Upload, Download, FileText, Settings } from 'lucide-react';
 
 interface ParsedResult {
   success: boolean;
@@ -8,170 +12,150 @@ interface ParsedResult {
   filename?: string;
 }
 
-interface StructField {
-  id: string;
-  type: 'L' | 'l' | 'i' | 'h' | 'H' | 'f' | 'B' | 'b' | 'x' | 's' | 'p';
-  fieldName: string;
-  count?: number;
-  status: 'valid' | 'error' | 'warning';
-  statusMessage?: string;
-  parsedSample?: any;
-}
-
-interface StructSpec {
-  id: string;
+interface FourLetterCodeSpec {
   fourCC: string;
-  fields: StructField[];
+  structSpec: string;
   isArray: boolean;
   autoPadding: boolean;
+  status: 'valid' | 'error' | 'warning';
+  statusMessage?: string;
+  sampleData?: any;
+  dataTypes: DataTypeField[];
+}
+
+interface DataTypeField {
+  id: string;
+  type: 'L' | 'l' | 'i' | 'h' | 'H' | 'f' | 'B' | 'b' | 'x' | 's' | 'p';
+  count: number;
+  description: string;
 }
 
 export default function ResourceForkParser() {
   const [parsedResult, setParsedResult] = useState<ParsedResult | null>(null);
-  const [customSpecs, setCustomSpecs] = useState<StructSpec[]>([]);
+  const [fourLetterCodes, setFourLetterCodes] = useState<FourLetterCodeSpec[]>([]);
   const [parseError, setParseError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedSpecId, setSelectedSpecId] = useState<string>('');
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [saveLoadOpen, setSaveLoadOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const specFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize with a default spec for demonstration
-  React.useEffect(() => {
-    const defaultSpec: StructSpec = {
-      id: '1',
-      fourCC: 'Hedr',
-      isArray: false,
-      autoPadding: false,
-      fields: [
-        { id: '1', type: 'L', fieldName: 'version', status: 'valid' },
-        { id: '2', type: 'i', fieldName: 'numItems', count: 5, status: 'valid' },
-        { id: '3', type: 'f', fieldName: 'dimensions', count: 3, status: 'valid' },
-        { id: '4', type: 'i', fieldName: 'properties', count: 5, status: 'valid' },
-        { id: '5', type: 'x', fieldName: 'padding', count: 40, status: 'valid' }
-      ]
-    };
-    setCustomSpecs([defaultSpec]);
-    setSelectedSpecId('1');
+  // Extract four-letter codes from uploaded file and set default specs
+  const extractFourLetterCodes = useCallback(async (file: File): Promise<FourLetterCodeSpec[]> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      
+      // Parse with default specs to extract four-letter codes
+      const result = saveToJson(data, [], [], [], false);
+      
+      // Extract unique four-letter codes from the result
+      const fourLetterCodesSet = new Set<string>();
+      
+      if (result && typeof result === 'object') {
+        Object.keys(result).forEach(key => {
+          if (key.length === 4) {
+            fourLetterCodesSet.add(key);
+          }
+        });
+      }
+      
+      // Create default specs for each four-letter code
+      const defaultSpecs: FourLetterCodeSpec[] = Array.from(fourLetterCodesSet).map(fourCC => ({
+        fourCC,
+        structSpec: 'i', // Default to single integer
+        isArray: false,
+        autoPadding: false,
+        status: 'valid' as const,
+        sampleData: null,
+        dataTypes: [
+          { id: '1', type: 'i', count: 1, description: 'field_1' }
+        ]
+      }));
+      
+      return defaultSpecs;
+    } catch (error) {
+      console.error('Error extracting four-letter codes:', error);
+      return [];
+    }
   }, []);
 
-  const generateStructSpec = useCallback((spec: StructSpec): string => {
+  const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = '';
-    for (const field of spec.fields) {
-      if (field.count && field.count > 1) {
-        result += `${field.count}${field.type}`;
+    for (const dataType of spec.dataTypes) {
+      if (dataType.count > 1) {
+        result += `${dataType.count}${dataType.type}`;
       } else {
-        result += field.type;
+        result += dataType.type;
       }
     }
     return result + (spec.isArray ? '+' : '');
   }, []);
 
-  const getTypeDescription = useCallback((type: string): string => {
-    const descriptions: Record<string, string> = {
-      'L': 'Unsigned long (4 bytes)',
-      'l': 'Signed long (4 bytes)', 
-      'i': 'Signed int (4 bytes)',
-      'h': 'Signed short (2 bytes)',
-      'H': 'Unsigned short (2 bytes)',
-      'f': 'Float (4 bytes)',
-      'B': 'Unsigned byte (1 byte)',
-      'b': 'Signed byte (1 byte)',
-      'x': 'Padding byte',
-      's': 'String',
-      'p': 'Pascal string'
-    };
-    return descriptions[type] || 'Unknown type';
-  }, []);
-
-  const generateSampleData = useCallback((field: StructField): any => {
-    const { type, count = 1 } = field;
-    const generateSingle = () => {
-      switch (type) {
-        case 'L': case 'l': case 'i': return Math.floor(Math.random() * 1000);
-        case 'h': case 'H': return Math.floor(Math.random() * 100);
-        case 'f': return Math.random() * 100;
-        case 'B': case 'b': return Math.floor(Math.random() * 256);
-        case 'x': return 0;
-        case 's': case 'p': return 'sample_text';
-        default: return 0;
-      }
-    };
-    
-    if (count > 1) {
-      return Array.from({ length: Math.min(count, 3) }, generateSingle);
-    }
-    return generateSingle();
-  }, []);
-
-  const validateAndParseField = useCallback((field: StructField, _spec: StructSpec): StructField => {
-    const validTypes = ['L', 'l', 'i', 'h', 'H', 'f', 'B', 'b', 'x', 's', 'p'];
-    
-    if (!validTypes.includes(field.type)) {
-      return {
-        ...field,
-        status: 'error',
-        statusMessage: 'Invalid type. Use L, l, i, h, H, f, B, b, x, s, p'
-      };
-    }
-
-    if (field.count && (field.count < 1 || field.count > 1000)) {
-      return {
-        ...field,
-        status: 'error',
-        statusMessage: 'Count must be between 1 and 1000'
-      };
-    }
-
-    if (!field.fieldName.trim() && field.type !== 'x') {
-      return {
-        ...field,
-        status: 'warning',
-        statusMessage: 'Field name is recommended'
-      };
-    }
-
-    // Try to generate a sample parsing result
+  const parseWithSpecs = useCallback(async (data: Uint8Array, specs: FourLetterCodeSpec[]) => {
     try {
-      return {
-        ...field,
-        status: 'valid',
-        statusMessage: `${field.type} - ${getTypeDescription(field.type)}`,
-        parsedSample: generateSampleData(field)
-      };
-    } catch (error) {
-      return {
-        ...field,
-        status: 'error',
-        statusMessage: 'Failed to validate struct'
-      };
-    }
-  }, [getTypeDescription, generateSampleData]);
-
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setParseError('');
-    setIsProcessing(true);
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const data = new Uint8Array(arrayBuffer);
-      
-      // Create struct specs array from custom specs
-      const structSpecs = customSpecs.map((spec: StructSpec) => {
+      // Create struct specs array for parsing
+      const structSpecs = specs.map((spec: FourLetterCodeSpec) => {
         const specStr = generateStructSpec(spec);
-        const description = spec.fields.map((f: StructField) => f.fieldName).filter(Boolean).join(',');
+        const description = spec.dataTypes.map(dt => dt.description).join(',');
         return `${spec.fourCC}:${specStr}:${description}`;
       });
       
       const result = saveToJson(data, structSpecs, [], [], false);
       
-      setParsedResult({
-        success: true,
-        data: result,
-        filename: file.name
+      // Update specs with sample data and validation status
+      const updatedSpecs = specs.map(spec => {
+        const sampleData = result && result[spec.fourCC] ? result[spec.fourCC] : null;
+        
+        return {
+          ...spec,
+          sampleData,
+          status: sampleData ? 'valid' as const : 'error' as const,
+          statusMessage: sampleData ? 'Successfully parsed' : 'Failed to parse data'
+        };
       });
+      
+      return { result, updatedSpecs };
+    } catch (error) {
+      // Mark all specs as error
+      const errorSpecs = specs.map(spec => ({
+        ...spec,
+        status: 'error' as const,
+        statusMessage: 'Parse error: ' + (error instanceof Error ? error.message : 'Unknown error')
+      }));
+      
+      return { result: null, updatedSpecs: errorSpecs };
+    }
+  }, [generateStructSpec]);
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setParseError('');
+    setIsProcessing(true);
+    setCurrentFile(file);
+
+    try {
+      // Extract four-letter codes from the file
+      const extractedSpecs = await extractFourLetterCodes(file);
+      setFourLetterCodes(extractedSpecs);
+      
+      // Parse with default specs
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const { result, updatedSpecs } = await parseWithSpecs(data, extractedSpecs);
+      
+      setFourLetterCodes(updatedSpecs);
+      
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: file.name
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setParseError(errorMessage);
@@ -183,7 +167,34 @@ export default function ResourceForkParser() {
     } finally {
       setIsProcessing(false);
     }
-  }, [customSpecs, generateStructSpec]);
+  }, [extractFourLetterCodes, parseWithSpecs]);
+
+  const handleReparse = useCallback(async () => {
+    if (!currentFile) return;
+    
+    setIsProcessing(true);
+    try {
+      const arrayBuffer = await currentFile.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const { result, updatedSpecs } = await parseWithSpecs(data, fourLetterCodes);
+      
+      setFourLetterCodes(updatedSpecs);
+      
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: currentFile.name
+        });
+        setParseError('');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setParseError(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [currentFile, fourLetterCodes, parseWithSpecs]);
 
   const handleJsonUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -196,10 +207,10 @@ export default function ResourceForkParser() {
       const text = await file.text();
       const jsonData = JSON.parse(text);
       
-      // Create struct specs array from custom specs
-      const structSpecs = customSpecs.map((spec: StructSpec) => {
+      // Create struct specs array from current four-letter codes
+      const structSpecs = fourLetterCodes.map((spec: FourLetterCodeSpec) => {
         const specStr = generateStructSpec(spec);
-        const description = spec.fields.map((f: StructField) => f.fieldName).filter(Boolean).join(',');
+        const description = spec.dataTypes.map(dt => dt.description).join(',');
         return `${spec.fourCC}:${specStr}:${description}`;
       });
       
@@ -223,7 +234,7 @@ export default function ResourceForkParser() {
     } finally {
       setIsProcessing(false);
     }
-  }, [customSpecs, generateStructSpec]);
+  }, [fourLetterCodes, generateStructSpec]);
 
   const downloadJson = useCallback(() => {
     if (!parsedResult?.success || !parsedResult.data) return;
@@ -251,94 +262,107 @@ export default function ResourceForkParser() {
       }
       
       const arrayBuffer = await response.arrayBuffer();
-      const data = new Uint8Array(arrayBuffer);
       
-      const result = saveToJson(data, [], [], [], true);
+      // Create a File object to simulate file upload
+      const file = new File([arrayBuffer], 'EarthFarm.ter.rsrc', { type: 'application/octet-stream' });
+      setCurrentFile(file);
       
-      setParsedResult({
-        success: true,
-        data: result,
-        filename: 'EarthFarm.ter.rsrc'
+      // Extract four-letter codes and parse
+      const extractedSpecs = await extractFourLetterCodes(file);
+      
+      // Set default EarthFarm specs if available
+      const earthFarmSpecs = extractedSpecs.map(spec => {
+        if (spec.fourCC === 'Hedr') {
+          return {
+            ...spec,
+            dataTypes: [
+              { id: '1', type: 'L' as const, count: 1, description: 'version' },
+              { id: '2', type: 'i' as const, count: 5, description: 'numItems' },
+              { id: '3', type: 'f' as const, count: 3, description: 'dimensions' },
+              { id: '4', type: 'i' as const, count: 5, description: 'properties' },
+              { id: '5', type: 'x' as const, count: 40, description: 'padding' }
+            ]
+          };
+        } else if (spec.fourCC === 'Layr') {
+          return {
+            ...spec,
+            dataTypes: [
+              { id: '1', type: 'i' as const, count: 1, description: 'layer_data' }
+            ]
+          };
+        }
+        return spec;
       });
+      
+      setFourLetterCodes(earthFarmSpecs);
+      
+      // Parse with updated specs
+      const data = new Uint8Array(arrayBuffer);
+      const { result, updatedSpecs } = await parseWithSpecs(data, earthFarmSpecs);
+      
+      setFourLetterCodes(updatedSpecs);
+      
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: 'EarthFarm.ter.rsrc'
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load sample file';
       setParseError(errorMessage);
     } finally {
       setIsProcessing(false);
     }
-  }, [customSpecs]);
+  }, [extractFourLetterCodes, parseWithSpecs]);
 
-  const addCustomSpec = useCallback(() => {
-    const newSpec: StructSpec = {
-      id: Date.now().toString(),
-      fourCC: '',
-      isArray: false,
-      autoPadding: false,
-      fields: [
-        { id: '1', type: 'i', fieldName: '', status: 'valid' }
-      ]
-    };
-    setCustomSpecs((prev: StructSpec[]) => [...prev, newSpec]);
-    setSelectedSpecId(newSpec.id);
-  }, []);
-
-  const updateSpec = useCallback((id: string, updates: Partial<StructSpec>) => {
-    setCustomSpecs((prev: StructSpec[]) => prev.map((spec: StructSpec) => 
-      spec.id === id ? { ...spec, ...updates } : spec
+  const updateFourLetterCode = useCallback((fourCC: string, updates: Partial<FourLetterCodeSpec>) => {
+    setFourLetterCodes(prev => prev.map(spec => 
+      spec.fourCC === fourCC ? { ...spec, ...updates } : spec
     ));
   }, []);
 
-  const addField = useCallback((specId: string) => {
-    setCustomSpecs((prev: StructSpec[]) => prev.map((spec: StructSpec) => {
-      if (spec.id === specId) {
-        const newField: StructField = {
+  const updateDataType = useCallback((fourCC: string, dataTypeId: string, updates: Partial<DataTypeField>) => {
+    setFourLetterCodes(prev => prev.map(spec => {
+      if (spec.fourCC === fourCC) {
+        const updatedDataTypes = spec.dataTypes.map(dt => 
+          dt.id === dataTypeId ? { ...dt, ...updates } : dt
+        );
+        return { ...spec, dataTypes: updatedDataTypes };
+      }
+      return spec;
+    }));
+  }, []);
+
+  const addDataType = useCallback((fourCC: string) => {
+    setFourLetterCodes(prev => prev.map(spec => {
+      if (spec.fourCC === fourCC) {
+        const newDataType: DataTypeField = {
           id: Date.now().toString(),
           type: 'i',
-          fieldName: '',
-          status: 'valid'
+          count: 1,
+          description: `field_${spec.dataTypes.length + 1}`
         };
-        return { ...spec, fields: [...spec.fields, newField] };
+        return { ...spec, dataTypes: [...spec.dataTypes, newDataType] };
       }
       return spec;
     }));
   }, []);
 
-  const updateField = useCallback((specId: string, fieldId: string, updates: Partial<StructField>) => {
-    setCustomSpecs((prev: StructSpec[]) => prev.map((spec: StructSpec) => {
-      if (spec.id === specId) {
-        const updatedFields = spec.fields.map((field: StructField) => {
-          if (field.id === fieldId) {
-            const updatedField = { ...field, ...updates };
-            return validateAndParseField(updatedField, spec);
-          }
-          return field;
-        });
-        return { ...spec, fields: updatedFields };
-      }
-      return spec;
-    }));
-  }, [validateAndParseField]);
-
-  const removeField = useCallback((specId: string, fieldId: string) => {
-    setCustomSpecs((prev: StructSpec[]) => prev.map((spec: StructSpec) => {
-      if (spec.id === specId) {
-        return { ...spec, fields: spec.fields.filter((field: StructField) => field.id !== fieldId) };
+  const removeDataType = useCallback((fourCC: string, dataTypeId: string) => {
+    setFourLetterCodes(prev => prev.map(spec => {
+      if (spec.fourCC === fourCC) {
+        return { ...spec, dataTypes: spec.dataTypes.filter(dt => dt.id !== dataTypeId) };
       }
       return spec;
     }));
   }, []);
-
-  const removeSpec = useCallback((id: string) => {
-    setCustomSpecs((prev: StructSpec[]) => prev.filter((spec: StructSpec) => spec.id !== id));
-    if (selectedSpecId === id) {
-      setSelectedSpecId(customSpecs.find((s: StructSpec) => s.id !== id)?.id || '');
-    }
-  }, [selectedSpecId, customSpecs]);
 
   const saveSpecsToFile = useCallback(() => {
-    const specsText = customSpecs.map((spec: StructSpec) => {
+    const specsText = fourLetterCodes.map((spec: FourLetterCodeSpec) => {
       const specStr = generateStructSpec(spec);
-      const description = spec.fields.map((f: StructField) => f.fieldName).filter(Boolean).join(',');
+      const description = spec.dataTypes.map(dt => dt.description).join(',');
       return `${spec.fourCC}:${specStr}:${description}`;
     }).join('\n');
 
@@ -351,7 +375,7 @@ export default function ResourceForkParser() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [customSpecs, generateStructSpec]);
+  }, [fourLetterCodes, generateStructSpec]);
 
   const loadSpecsFromFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -361,11 +385,11 @@ export default function ResourceForkParser() {
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim() && !line.startsWith('//'));
       
-      const loadedSpecs: StructSpec[] = lines.map((line, index) => {
+      const loadedSpecs: FourLetterCodeSpec[] = lines.map((line, index) => {
         const [fourCC, spec, description] = line.split(':');
         
-        // Parse the spec string into fields
-        const fields: StructField[] = [];
+        // Parse the spec string into data types
+        const dataTypes: DataTypeField[] = [];
         const fieldNames = description ? description.split(',') : [];
         let fieldIndex = 0;
         let i = 0;
@@ -381,14 +405,13 @@ export default function ResourceForkParser() {
           
           if (i < spec.length) {
             const type = spec[i];
-            const fieldName = fieldNames[fieldIndex] || '';
+            const description = fieldNames[fieldIndex] || `field_${fieldIndex + 1}`;
             
-            fields.push({
+            dataTypes.push({
               id: `${index}-${fieldIndex}`,
-              type: type as 'L' | 'l' | 'i' | 'h' | 'H' | 'f' | 'B' | 'b' | 'x' | 's' | 'p',
-              fieldName: fieldName.trim(),
-              count: count ? parseInt(count) : undefined,
-              status: 'valid' as const
+              type: type as DataTypeField['type'],
+              count: count ? parseInt(count) : 1,
+              description: description.trim()
             });
             
             fieldIndex++;
@@ -397,273 +420,276 @@ export default function ResourceForkParser() {
         }
         
         return {
-          id: `loaded-${index}`,
           fourCC: fourCC.trim(),
+          structSpec: spec,
           isArray: spec.endsWith('+'),
           autoPadding: false,
-          fields
+          status: 'valid' as const,
+          sampleData: null,
+          dataTypes
         };
       });
       
-      setCustomSpecs(loadedSpecs);
-      if (loadedSpecs.length > 0) {
-        setSelectedSpecId(loadedSpecs[0].id);
-      }
+      setFourLetterCodes(loadedSpecs);
     } catch (error) {
       setParseError('Failed to load struct specs file');
     }
   }, []);
 
-  const selectedSpec = customSpecs.find(spec => spec.id === selectedSpecId);
-
   return (
-    <div className="container p-6 max-w-6xl">
-      <h1 className="text-3xl font-bold mb-6 text-center text-white">
+    <div className="container mx-auto max-w-4xl p-6 space-y-6">
+      <h1 className="text-3xl font-bold text-center text-white mb-8">
         Mac Resource Fork Parser
       </h1>
       
-      <div className="grid grid-cols-2 gap-6">
-        {/* Left Panel - File Operations */}
-        <div className="space-y-6">
-          {/* File Upload Section */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4 text-white">File Operations</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700">
-                  Upload Resource Fork File (.rsrc)
-                </label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".rsrc"
-                  onChange={handleFileUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                  disabled={isProcessing}
-                />
+      {/* Collapsible Save/Load Section */}
+      <Card>
+        <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
+          <CollapsibleTrigger className="flex w-full items-center justify-between p-4 hover:bg-accent">
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <span className="font-medium">Save & Load Specifications</span>
+            </div>
+            <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 gap-4">
+                <Button onClick={saveSpecsToFile} variant="outline" className="w-full">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Save Specs to .txt
+                </Button>
+                <div>
+                  <input
+                    ref={specFileInputRef}
+                    type="file"
+                    accept=".txt"
+                    onChange={loadSpecsFromFile}
+                    className="hidden"
+                    id="spec-file-input"
+                  />
+                  <Button 
+                    onClick={() => specFileInputRef.current?.click()} 
+                    variant="outline" 
+                    className="w-full"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Load Specs from .txt
+                  </Button>
+                </div>
               </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
 
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700">
-                  Upload JSON File (to convert back to .rsrc)
-                </label>
-                <input
-                  ref={jsonInputRef}
-                  type="file"
-                  accept=".json"
-                  onChange={handleJsonUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                  disabled={isProcessing}
-                />
-              </div>
+      {/* Combined File Upload/Download Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            File Operations
+          </CardTitle>
+          <CardDescription>
+            Upload a resource fork file to analyze, or convert JSON back to .rsrc format
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Upload Resource Fork */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Upload .rsrc file</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".rsrc"
+                onChange={handleFileUpload}
+                className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                disabled={isProcessing}
+              />
+            </div>
 
-              <button
+            {/* Upload JSON */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Upload .json file</label>
+              <input
+                ref={jsonInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleJsonUpload}
+                className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80"
+                disabled={isProcessing}
+              />
+            </div>
+
+            {/* Sample File */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Sample File</label>
+              <Button
                 onClick={loadEarthFarmSample}
                 disabled={isProcessing}
-                className="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 disabled:opacity-50"
+                className="w-full"
+                variant="secondary"
               >
-                {isProcessing ? 'Processing...' : 'Load EarthFarm Sample'}
-              </button>
+                {isProcessing ? 'Loading...' : 'Load EarthFarm Sample'}
+              </Button>
             </div>
           </div>
 
-          {/* Struct Specs File Operations */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4 text-white">Struct Specs</h2>
-            <div className="space-y-2">
-              <button
-                onClick={saveSpecsToFile}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 text-sm"
-              >
-                Save Specs to .txt
-              </button>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700">
-                  Load Specs from .txt
-                </label>
-                <input
-                  ref={specFileInputRef}
-                  type="file"
-                  accept=".txt"
-                  onChange={loadSpecsFromFile}
-                  className="block w-full text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Results */}
-          {parseError && (
-            <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
-              <h3 className="text-red-800 font-semibold">Error</h3>
-              <p className="text-red-600 mt-1">{parseError}</p>
-            </div>
-          )}
-
+          {/* Download JSON Button */}
           {parsedResult?.success && (
-            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-              <h3 className="text-green-800 font-semibold">Parsing Successful!</h3>
-              <p className="text-green-600 mt-1">
-                File: {parsedResult.filename}
-              </p>
-              <button
-                onClick={downloadJson}
-                className="mt-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
-              >
-                Download JSON
-              </button>
+            <div className="pt-4 border-t">
+              <Button onClick={downloadJson} className="w-full" size="lg">
+                <Download className="h-4 w-4 mr-2" />
+                Download Parsed JSON
+              </Button>
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Right Panel - Struct Specification Editor */}
-        <div className="space-y-6">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-white">Struct Specifications</h2>
-              <button
-                onClick={addCustomSpec}
-                className="bg-blue-600 text-white py-1 px-3 rounded text-sm hover:bg-blue-700"
-              >
-                Add Spec
-              </button>
-            </div>
+      {/* Error Display */}
+      {parseError && (
+        <Card className="border-destructive bg-destructive/10">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-destructive">{parseError}</p>
+          </CardContent>
+        </Card>
+      )}
 
-            {/* Spec Selector */}
-            <div className="mb-4">
-              <select
-                value={selectedSpecId}
-                onChange={(e) => setSelectedSpecId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded bg-white text-gray-700"
-              >
-                <option value="">Select a specification...</option>
-                {customSpecs.map(spec => (
-                  <option key={spec.id} value={spec.id}>
-                    {spec.fourCC || 'Unnamed'} ({spec.fields.length} fields)
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* Success Display */}
+      {parsedResult?.success && (
+        <Card className="border-green-500 bg-green-50 dark:bg-green-950">
+          <CardHeader>
+            <CardTitle className="text-green-800 dark:text-green-200">
+              Parsing Successful!
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-green-700 dark:text-green-300">
+              File: {parsedResult.filename}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-            {selectedSpec && (
-              <div className="space-y-4">
-                {/* Spec Header */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700">Four-letter Code</label>
-                    <input
-                      type="text"
-                      value={selectedSpec.fourCC}
-                      onChange={(e) => updateSpec(selectedSpec.id, { fourCC: e.target.value })}
-                      className="w-full px-2 py-1 border border-gray-200 rounded"
-                      placeholder="e.g. Hedr"
-                      maxLength={4}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="flex items-center text-gray-700">
-                      <div className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={selectedSpec.isArray}
-                          onChange={(e) => updateSpec(selectedSpec.id, { isArray: e.target.checked })}
-                        />
-                        <span className="toggle-slider"></span>
-                      </div>
-                      <span className="ml-2 text-sm">Is Array</span>
-                    </label>
-                    <label className="flex items-center text-gray-700">
-                      <div className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={selectedSpec.autoPadding}
-                          onChange={(e) => updateSpec(selectedSpec.id, { autoPadding: e.target.checked })}
-                        />
-                        <span className="toggle-slider"></span>
-                      </div>
-                      <span className="ml-2 text-sm">Auto Padding</span>
-                    </label>
+      {/* Four-Letter Codes Configuration */}
+      {fourLetterCodes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configure Four-Letter Codes</CardTitle>
+            <CardDescription>
+              Adjust data type specifications for each four-letter code found in your file
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {fourLetterCodes.map((spec) => (
+              <div key={spec.fourCC} className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">{spec.fourCC}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      spec.status === 'valid' ? 'bg-green-100 text-green-800' : 
+                      spec.status === 'error' ? 'bg-red-100 text-red-800' : 
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {spec.status === 'valid' ? '✓' : spec.status === 'error' ? '✗' : '⚠'}
+                      {spec.statusMessage}
+                    </span>
                   </div>
                 </div>
 
-                {/* Fields Table */}
-                <div className="table-dark">
-                  <table className="w-full">
+                {/* Toggle Controls */}
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={spec.isArray}
+                      onChange={(e) => updateFourLetterCode(spec.fourCC, { isArray: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Is Array</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={spec.autoPadding}
+                      onChange={(e) => updateFourLetterCode(spec.fourCC, { autoPadding: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Auto Padding</span>
+                  </label>
+                </div>
+
+                {/* Data Types Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-border rounded-lg">
                     <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Count</th>
-                        <th>Field Name</th>
-                        <th>Status</th>
-                        <th>Sample</th>
-                        <th>Actions</th>
+                      <tr className="bg-muted">
+                        <th className="border border-border p-3 text-left">Type</th>
+                        <th className="border border-border p-3 text-left">Count</th>
+                        <th className="border border-border p-3 text-left">Description</th>
+                        <th className="border border-border p-3 text-left">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedSpec.fields.map((field) => (
-                        <tr key={field.id}>
-                          <td>
+                      {spec.dataTypes.map((dataType) => (
+                        <tr key={dataType.id}>
+                          <td className="border border-border p-3">
                             <select
-                              value={field.type}
-                              onChange={(e) => updateField(selectedSpec.id, field.id, { type: e.target.value as StructField['type'] })}
-                              className="w-full px-2 py-1 text-sm bg-white border border-gray-200 rounded"
+                              value={dataType.type}
+                              onChange={(e) => updateDataType(spec.fourCC, dataType.id, { 
+                                type: e.target.value as DataTypeField['type'] 
+                              })}
+                              className="w-full px-3 py-1 border border-input rounded-md bg-background min-w-[120px]"
                             >
-                              <option value="L">L (ulong)</option>
-                              <option value="l">l (long)</option>
-                              <option value="i">i (int)</option>
-                              <option value="h">h (short)</option>
-                              <option value="H">H (ushort)</option>
+                              <option value="L">L (unsigned long)</option>
+                              <option value="l">l (signed long)</option>
+                              <option value="i">i (signed int)</option>
+                              <option value="h">h (signed short)</option>
+                              <option value="H">H (unsigned short)</option>
                               <option value="f">f (float)</option>
-                              <option value="B">B (ubyte)</option>
-                              <option value="b">b (byte)</option>
+                              <option value="B">B (unsigned byte)</option>
+                              <option value="b">b (signed byte)</option>
                               <option value="x">x (padding)</option>
                               <option value="s">s (string)</option>
-                              <option value="p">p (pstring)</option>
+                              <option value="p">p (pascal string)</option>
                             </select>
                           </td>
-                          <td>
+                          <td className="border border-border p-3">
                             <input
                               type="number"
-                              value={field.count || ''}
-                              onChange={(e) => updateField(selectedSpec.id, field.id, { 
-                                count: e.target.value ? parseInt(e.target.value) : undefined 
+                              value={dataType.count}
+                              onChange={(e) => updateDataType(spec.fourCC, dataType.id, { 
+                                count: parseInt(e.target.value) || 1 
                               })}
-                              className="w-full px-2 py-1 text-sm"
-                              placeholder="1"
+                              className="w-full px-3 py-1 border border-input rounded-md bg-background"
                               min="1"
                               max="1000"
                             />
                           </td>
-                          <td>
+                          <td className="border border-border p-3">
                             <input
                               type="text"
-                              value={field.fieldName}
-                              onChange={(e) => updateField(selectedSpec.id, field.id, { fieldName: e.target.value })}
-                              className="w-full px-2 py-1 text-sm"
+                              value={dataType.description}
+                              onChange={(e) => updateDataType(spec.fourCC, dataType.id, { 
+                                description: e.target.value 
+                              })}
+                              className="w-full px-3 py-1 border border-input rounded-md bg-background"
                               placeholder="field_name"
                             />
                           </td>
-                          <td>
-                            <span className={`text-xs ${
-                              field.status === 'valid' ? 'status-success' : 
-                              field.status === 'error' ? 'status-error' : 'status-warning'
-                            }`}>
-                              {field.status === 'valid' ? '✓' : field.status === 'error' ? '✗' : '⚠'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="text-xs font-mono text-blue-700">
-                              {field.parsedSample !== undefined ? JSON.stringify(field.parsedSample) : '-'}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              onClick={() => removeField(selectedSpec.id, field.id)}
-                              className="text-red-600 text-xs hover:text-red-800"
+                          <td className="border border-border p-3">
+                            <Button
+                              onClick={() => removeDataType(spec.fourCC, dataType.id)}
+                              variant="destructive"
+                              size="sm"
                             >
                               Remove
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -671,31 +697,35 @@ export default function ResourceForkParser() {
                   </table>
                 </div>
 
-                <div className="flex justify-between">
-                  <button
-                    onClick={() => addField(selectedSpec.id)}
-                    className="bg-green-600 text-white py-1 px-3 rounded text-sm hover:bg-green-700"
+                <div className="flex justify-between items-center">
+                  <Button
+                    onClick={() => addDataType(spec.fourCC)}
+                    variant="outline"
                   >
-                    Add Field
-                  </button>
-                  <button
-                    onClick={() => removeSpec(selectedSpec.id)}
-                    className="bg-red-600 text-white py-1 px-3 rounded text-sm hover:bg-red-700"
+                    Add Data Type
+                  </Button>
+                  <Button
+                    onClick={handleReparse}
+                    disabled={isProcessing}
                   >
-                    Delete Spec
-                  </button>
+                    {isProcessing ? 'Processing...' : 'Update Parse'}
+                  </Button>
                 </div>
 
-                {/* Generated Spec Preview */}
-                <div className="bg-blue-50 p-3 rounded text-sm">
-                  <h4 className="font-semibold text-blue-800 mb-1">Generated Spec:</h4>
-                  <code className="text-blue-700">{selectedSpec.fourCC}:{generateStructSpec(selectedSpec)}</code>
-                </div>
+                {/* Sample Data Display */}
+                {spec.sampleData && (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <h4 className="font-medium mb-2">Sample Data:</h4>
+                    <pre className="text-xs font-mono overflow-x-auto">
+                      {JSON.stringify(spec.sampleData, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

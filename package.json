@@ -9,16 +9,28 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "playwright test",
+    "test:unit": "vitest",
     "test:manual": "node tests/comprehensive-test.js"
   },
   "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-select": "^2.2.6",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.541.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "vitest": "^3.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4.1.12",
+    "@types/node": "^24.3.0",
     "@types/react": "^19.1.11",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react-swc": "^4.0.0",
