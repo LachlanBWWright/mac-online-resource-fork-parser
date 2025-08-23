@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
+import { Textarea } from './ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { ChevronDown, Upload, Download, FileText, Settings, Plus, Trash2, Check, X, AlertTriangle } from 'lucide-react';
 
@@ -202,20 +203,32 @@ export default function ResourceForkParser() {
     }
   }, [extractFourLetterCodes, parseWithSpecs]);
 
-  const downloadJson = useCallback(() => {
-    if (!parsedResult?.success || !parsedResult.data) return;
-
-    const jsonString = JSON.stringify(parsedResult.data, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${parsedResult.filename || 'parsed'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [parsedResult]);
+  const handleReparse = useCallback(async () => {
+    if (!currentFile) return;
+    
+    setIsProcessing(true);
+    try {
+      const arrayBuffer = await currentFile.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const { result, updatedSpecs } = await parseWithSpecs(data, fourLetterCodes);
+      
+      setFourLetterCodes(updatedSpecs);
+      
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: currentFile.name
+        });
+        setParseError('');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setParseError(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [currentFile, fourLetterCodes, parseWithSpecs]);
 
   const handleJsonUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -256,6 +269,21 @@ export default function ResourceForkParser() {
       setIsProcessing(false);
     }
   }, [fourLetterCodes, generateStructSpec]);
+
+  const downloadJson = useCallback(() => {
+    if (!parsedResult?.success || !parsedResult.data) return;
+
+    const jsonString = JSON.stringify(parsedResult.data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${parsedResult.filename || 'parsed'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [parsedResult]);
 
   // Functions to handle four-letter code specifications
   const updateFourLetterCodeSpec = useCallback(async (index: number, updates: Partial<FourLetterCodeSpec>) => {
@@ -309,8 +337,6 @@ export default function ResourceForkParser() {
       };
       updateFourLetterCodeSpec(specIndex, { dataTypes: updatedSpecs[specIndex].dataTypes });
     }
-  }, [fourLetterCodes, updateFourLetterCodeSpec]);
-
   // Load EarthFarm sample file
   const loadEarthFarmSample = useCallback(async () => {
     setParseError('');
@@ -384,7 +410,7 @@ export default function ResourceForkParser() {
       const lines = text.split('\n').filter(line => line.trim());
       
       const loadedSpecs: FourLetterCodeSpec[] = lines.map((line, index) => {
-        const [fourCC, structSpec] = line.split(':');
+        const [fourCC, structSpec, description] = line.split(':');
         
         // Parse the struct spec back into data types
         const dataTypes: DataTypeField[] = [];
