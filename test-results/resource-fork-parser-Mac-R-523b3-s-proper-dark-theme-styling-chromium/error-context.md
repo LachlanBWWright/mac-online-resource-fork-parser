@@ -1,35 +1,22 @@
 # Page snapshot
 
 ```yaml
-- generic [ref=e4]:
-  - generic [ref=e5]:
-    - heading "Mac Resource Fork Parser" [level=1] [ref=e6]
-    - paragraph [ref=e7]: Upload a resource fork file to analyze and experiment with data types
-  - generic [ref=e11]:
-    - generic [ref=e12]:
-      - img [ref=e13]
-      - heading "Save & Load Specifications" [level=3] [ref=e16]
-    - img [ref=e17]
-  - generic [ref=e19]:
-    - generic [ref=e20]:
-      - heading "File Operations" [level=3] [ref=e21]:
-        - img [ref=e22]
-        - text: File Operations
-      - paragraph [ref=e25]: Upload files to parse or convert, or try the sample file
-    - generic [ref=e27]:
-      - generic [ref=e28]:
-        - generic [ref=e29]: Upload .rsrc File
-        - button "Choose File" [ref=e30]
-        - button "Choose .rsrc File" [ref=e31]:
-          - img [ref=e32]
-          - text: Choose .rsrc File
-      - generic [ref=e35]:
-        - generic [ref=e36]: Upload .json File
-        - button "Choose File" [ref=e37]
-        - button "Convert from JSON" [disabled] [ref=e38]:
-          - img [ref=e39]
-          - text: Convert from JSON
-      - generic [ref=e42]:
-        - generic [ref=e43]: Sample File
-        - button "Load EarthFarm Sample" [ref=e44]
+- generic [ref=e3]:
+  - generic [ref=e6]:
+    - heading "This site can’t be reached" [level=1] [ref=e7]:
+      - generic [ref=e8]: This site can’t be reached
+    - paragraph [ref=e9]:
+      - strong [ref=e10]: localhost
+      - text: refused to connect.
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: "Try:"
+      - list [ref=e13]:
+        - listitem [ref=e14]: Checking the connection
+        - listitem [ref=e15]:
+          - link "Checking the proxy and the firewall" [ref=e16] [cursor=pointer]:
+            - /url: "#buttons"
+    - generic [ref=e17]: ERR_CONNECTION_REFUSED
+  - generic [ref=e18]:
+    - button "Reload" [ref=e20] [cursor=pointer]
+    - button "Details" [ref=e21] [cursor=pointer]
 ```

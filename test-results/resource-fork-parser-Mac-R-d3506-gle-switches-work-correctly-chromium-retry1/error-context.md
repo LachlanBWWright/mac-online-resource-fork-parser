@@ -1,178 +1,22 @@
 # Page snapshot
 
 ```yaml
-- generic [ref=e4]:
-  - generic [ref=e5]:
-    - heading "Mac Resource Fork Parser" [level=1] [ref=e6]
-    - paragraph [ref=e7]: Upload a resource fork file to analyze and experiment with data types
-  - generic [ref=e11]:
-    - generic [ref=e12]:
-      - img [ref=e13]
-      - heading "Save & Load Specifications" [level=3] [ref=e16]
-    - img [ref=e17]
-  - generic [ref=e19]:
-    - generic [ref=e20]:
-      - heading "File Operations" [level=3] [ref=e21]:
-        - img [ref=e22]
-        - text: File Operations
-      - paragraph [ref=e25]: Upload files to parse or convert, or try the sample file
-    - generic [ref=e26]:
-      - generic [ref=e27]:
-        - generic [ref=e28]:
-          - generic [ref=e29]: Upload .rsrc File
-          - button "Choose File" [ref=e30]
-          - button "Choose .rsrc File" [ref=e31]:
-            - img [ref=e32]
-            - text: Choose .rsrc File
-        - generic [ref=e35]:
-          - generic [ref=e36]: Upload .json File
-          - button "Choose File" [ref=e37]
-          - button "Convert from JSON" [ref=e38]:
-            - img [ref=e39]
-            - text: Convert from JSON
-        - generic [ref=e42]:
-          - generic [ref=e43]: Sample File
-          - button "Load EarthFarm Sample" [ref=e44]
-      - button "Download as JSON" [ref=e46]:
-        - img [ref=e47]
-        - text: Download as JSON
-  - generic [ref=e50]:
-    - generic [ref=e51]:
-      - heading "Four-Letter Code Specifications" [level=3] [ref=e52]
-      - paragraph [ref=e53]: Configure data types for each four-letter code found in your file
-    - generic [ref=e54]:
-      - generic [ref=e55]:
-        - generic [ref=e56]:
-          - generic [ref=e57]:
-            - heading "Hedr" [level=3] [ref=e58]
-            - generic [ref=e59]:
-              - img [ref=e60]
-              - generic [ref=e62]: Successfully parsed data
-          - generic [ref=e63]:
-            - generic [ref=e64]:
-              - checkbox "Is Array" [ref=e65]
-              - text: Is Array
-            - generic [ref=e66]:
-              - checkbox "Auto Padding" [ref=e67]
-              - text: Auto Padding
-        - generic [ref=e68]:
-          - heading "Sample Data:" [level=4] [ref=e69]
-          - generic [ref=e70]: "{1000}"
-        - generic [ref=e71]:
-          - generic [ref=e72]:
-            - heading "Data Type Fields" [level=4] [ref=e73]
-            - button "Add Field" [ref=e74]:
-              - img [ref=e75]
-              - text: Add Field
-          - table [ref=e77]:
-            - rowgroup [ref=e78]:
-              - row "Type Count Description Actions" [ref=e79]:
-                - cell "Type" [ref=e80]
-                - cell "Count" [ref=e81]
-                - cell "Description" [ref=e82]
-                - cell "Actions" [ref=e83]
-            - rowgroup [ref=e84]:
-              - row "5 header_data" [ref=e85]:
-                - cell [ref=e86]:
-                  - combobox [ref=e87]:
-                    - generic: L - Unsigned Long (4 bytes)
-                    - img [ref=e88]
-                - cell "5" [ref=e90]:
-                  - spinbutton [ref=e91]: "5"
-                - cell "header_data" [ref=e92]:
-                  - textbox "Field description" [ref=e93]: header_data
-                - cell [ref=e94]:
-                  - button [ref=e95]:
-                    - img [ref=e96]
-              - row "3 integers" [ref=e99]:
-                - cell [ref=e100]:
-                  - combobox [ref=e101]:
-                    - generic: i - Signed Int (4 bytes)
-                    - img [ref=e102]
-                - cell "3" [ref=e104]:
-                  - spinbutton [ref=e105]: "3"
-                - cell "integers" [ref=e106]:
-                  - textbox "Field description" [ref=e107]: integers
-                - cell [ref=e108]:
-                  - button [ref=e109]:
-                    - img [ref=e110]
-              - row "5 floats" [ref=e113]:
-                - cell [ref=e114]:
-                  - combobox [ref=e115]:
-                    - generic: f - Float (4 bytes)
-                    - img [ref=e116]
-                - cell "5" [ref=e118]:
-                  - spinbutton [ref=e119]: "5"
-                - cell "floats" [ref=e120]:
-                  - textbox "Field description" [ref=e121]: floats
-                - cell [ref=e122]:
-                  - button [ref=e123]:
-                    - img [ref=e124]
-              - row "40 more_data" [ref=e127]:
-                - cell [ref=e128]:
-                  - combobox [ref=e129]:
-                    - generic: i - Signed Int (4 bytes)
-                    - img [ref=e130]
-                - cell "40" [ref=e132]:
-                  - spinbutton [ref=e133]: "40"
-                - cell "more_data" [ref=e134]:
-                  - textbox "Field description" [ref=e135]: more_data
-                - cell [ref=e136]:
-                  - button [ref=e137]:
-                    - img [ref=e138]
-              - row "40 padding" [ref=e141]:
-                - cell [ref=e142]:
-                  - combobox [ref=e143]:
-                    - generic: x - Padding Byte (1 byte)
-                    - img [ref=e144]
-                - cell "40" [ref=e146]:
-                  - spinbutton [ref=e147]: "40"
-                - cell "padding" [ref=e148]:
-                  - textbox "Field description" [ref=e149]: padding
-                - cell [ref=e150]:
-                  - button [ref=e151]:
-                    - img [ref=e152]
-      - generic [ref=e155]:
-        - generic [ref=e156]:
-          - generic [ref=e157]:
-            - heading "Layr" [level=3] [ref=e158]
-            - generic [ref=e159]:
-              - img [ref=e160]
-              - generic [ref=e162]: Successfully parsed data
-          - generic [ref=e163]:
-            - generic [ref=e164]:
-              - checkbox "Is Array" [checked] [ref=e165]
-              - text: Is Array
-            - generic [ref=e166]:
-              - checkbox "Auto Padding" [ref=e167]
-              - text: Auto Padding
-        - generic [ref=e168]:
-          - heading "Sample Data:" [level=4] [ref=e169]
-          - generic [ref=e170]: "{1000}"
-        - generic [ref=e171]:
-          - generic [ref=e172]:
-            - heading "Data Type Fields" [level=4] [ref=e173]
-            - button "Add Field" [ref=e174]:
-              - img [ref=e175]
-              - text: Add Field
-          - table [ref=e177]:
-            - rowgroup [ref=e178]:
-              - row "Type Count Description Actions" [ref=e179]:
-                - cell "Type" [ref=e180]
-                - cell "Count" [ref=e181]
-                - cell "Description" [ref=e182]
-                - cell "Actions" [ref=e183]
-            - rowgroup [ref=e184]:
-              - row "1 field_name" [ref=e185]:
-                - cell [ref=e186]:
-                  - combobox [ref=e187]:
-                    - generic: i - Signed Int (4 bytes)
-                    - img [ref=e188]
-                - cell "1" [ref=e190]:
-                  - spinbutton [ref=e191]: "1"
-                - cell "field_name" [ref=e192]:
-                  - textbox "Field description" [ref=e193]: field_name
-                - cell [ref=e194]:
-                  - button [disabled] [ref=e195]:
-                    - img [ref=e196]
+- generic [ref=e3]:
+  - generic [ref=e6]:
+    - heading "This site can’t be reached" [level=1] [ref=e7]:
+      - generic [ref=e8]: This site can’t be reached
+    - paragraph [ref=e9]:
+      - strong [ref=e10]: localhost
+      - text: refused to connect.
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: "Try:"
+      - list [ref=e13]:
+        - listitem [ref=e14]: Checking the connection
+        - listitem [ref=e15]:
+          - link "Checking the proxy and the firewall" [ref=e16] [cursor=pointer]:
+            - /url: "#buttons"
+    - generic [ref=e17]: ERR_CONNECTION_REFUSED
+  - generic [ref=e18]:
+    - button "Reload" [ref=e20] [cursor=pointer]
+    - button "Details" [ref=e21] [cursor=pointer]
 ```
