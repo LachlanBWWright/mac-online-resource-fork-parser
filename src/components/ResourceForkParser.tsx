@@ -44,7 +44,9 @@ import {
   Check,
   X,
   AlertTriangle,
+  Code,
 } from "lucide-react";
+import { useToast } from "../lib/toast";
 
 interface ParsedResult {
   success: boolean;
@@ -68,6 +70,9 @@ interface DataTypeField {
   type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
   count: number;
   description: string;
+  isArrayField?: boolean;
+  arraySize?: number;
+  arrayPrefix?: string;
 }
 
 const DATA_TYPE_OPTIONS = [
@@ -85,6 +90,7 @@ const DATA_TYPE_OPTIONS = [
 ] as const;
 
 export default function ResourceForkParser() {
+  const { success, error, warning, info } = useToast();
   const [parsedResult, setParsedResult] = useState<ParsedResult | null>(null);
   const [fourLetterCodes, setFourLetterCodes] = useState<FourLetterCodeSpec[]>(
     [],
@@ -147,7 +153,10 @@ export default function ResourceForkParser() {
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
-      if (dataType.count > 1) {
+      if (dataType.isArrayField && dataType.arraySize && dataType.arrayPrefix) {
+        // Handle array field like x`y[100] 
+        result += `${dataType.arrayPrefix}\`${dataType.description}[${dataType.arraySize}]`;
+      } else if (dataType.count > 1) {
         result += `${dataType.count}${dataType.type}`;
       } else {
         result += dataType.type;
@@ -155,6 +164,123 @@ export default function ResourceForkParser() {
     }
     return result + (spec.isArray ? "+" : "");
   }, []);
+
+  // Generate TypeScript interfaces from parsed data
+  const generateTypeScriptInterfaces = useCallback((parsedData: any): string => {
+    if (!parsedData || typeof parsedData !== 'object') {
+      return "// No data available for TypeScript generation";
+    }
+
+    const generateInterface = (name: string, data: any, depth: number = 0): string => {
+      const indent = "  ".repeat(depth);
+      let interfaceStr = `${indent}interface ${name} {\n`;
+      
+      if (Array.isArray(data) && data.length > 0) {
+        // For arrays, use first item as template
+        const firstItem = data[0];
+        if (firstItem && typeof firstItem === 'object') {
+          if (firstItem.obj) {
+            interfaceStr += generateInterfaceFields(firstItem.obj, depth + 1);
+          } else if (firstItem.conversionError) {
+            interfaceStr += `${indent}  conversionError: string;\n`;
+          } else if (firstItem.data) {
+            interfaceStr += `${indent}  data: string; // hex-encoded\n`;
+          } else {
+            interfaceStr += generateInterfaceFields(firstItem, depth + 1);
+          }
+        }
+      } else if (typeof data === 'object') {
+        interfaceStr += generateInterfaceFields(data, depth + 1);
+      }
+      
+      interfaceStr += `${indent}}\n\n`;
+      return interfaceStr;
+    };
+
+    const generateInterfaceFields = (obj: any, depth: number): string => {
+      const indent = "  ".repeat(depth);
+      let fields = "";
+      
+      for (const [key, value] of Object.entries(obj)) {
+        if (key === '_metadata') continue;
+        
+        const fieldType = getTypeScriptType(value);
+        fields += `${indent}${key}: ${fieldType};\n`;
+      }
+      
+      return fields;
+    };
+
+    const getTypeScriptType = (value: any): string => {
+      if (value === null || value === undefined) return "any";
+      if (typeof value === "string") return "string";
+      if (typeof value === "number") return "number";
+      if (typeof value === "boolean") return "boolean";
+      if (Array.isArray(value)) {
+        if (value.length === 0) return "any[]";
+        const itemType = getTypeScriptType(value[0]);
+        return `${itemType}[]`;
+      }
+      if (typeof value === "object") return "any"; // Could be more specific
+      return "any";
+    };
+
+    let result = "// Generated TypeScript interfaces\n\n";
+    
+    // Generate interfaces for each four-letter code
+    Object.keys(parsedData).forEach(fourCC => {
+      if (fourCC !== '_metadata') {
+        const capitalizedName = fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
+        result += generateInterface(`${capitalizedName}Data`, parsedData[fourCC]);
+      }
+    });
+
+    // Generate main interface
+    result += "interface ResourceForkData {\n";
+    Object.keys(parsedData).forEach(fourCC => {
+      if (fourCC !== '_metadata') {
+        const capitalizedName = fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
+        result += `  ${fourCC}: ${capitalizedName}Data[];\n`;
+      }
+    });
+    result += "}\n\n";
+
+    result += "export type { ResourceForkData };\n";
+    
+    return result;
+  }, []);
+
+  // Download TypeScript interfaces
+  const downloadTypeScript = useCallback(() => {
+    if (!parsedResult?.data) {
+      error("No parsed data available for TypeScript generation");
+      return;
+    }
+
+    try {
+      const tsContent = generateTypeScriptInterfaces(parsedResult.data);
+      const blob = new Blob([tsContent], { type: "text/typescript" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${parsedResult.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"}-types.ts`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      success({
+        title: "TypeScript Downloaded",
+        description: "TypeScript interface file has been generated and downloaded"
+      });
+    } catch (err) {
+      console.error("Error generating TypeScript:", err);
+      error({
+        title: "Generation Failed", 
+        description: "Failed to generate TypeScript interfaces"
+      });
+    }
+  }, [parsedResult, generateTypeScriptInterfaces, success, error]);
 
   const parseWithSpecs = useCallback(
     async (data: Uint8Array, specs: FourLetterCodeSpec[]) => {
@@ -362,6 +488,31 @@ export default function ResourceForkParser() {
     [fourLetterCodes, reParseWithUpdatedSpecs],
   );
 
+  // Add array field to spec
+  const addArrayFieldToSpec = useCallback(
+    (specIndex: number) => {
+      const updatedSpecs = [...fourLetterCodes];
+      const newId = (updatedSpecs[specIndex].dataTypes.length + 1).toString();
+      updatedSpecs[specIndex].dataTypes.push({
+        id: newId,
+        type: "i",
+        count: 1,
+        description: "y",
+        isArrayField: true,
+        arraySize: 100,
+        arrayPrefix: "x",
+      });
+      setFourLetterCodes(updatedSpecs);
+      reParseWithUpdatedSpecs(updatedSpecs);
+      
+      info({
+        title: "Array Field Added",
+        description: "Added an array field. Configure the prefix, field name, and size."
+      });
+    },
+    [fourLetterCodes, reParseWithUpdatedSpecs, info],
+  );
+
   // Load EarthFarm sample file
   const loadEarthFarmSample = useCallback(async () => {
     setParseError("");
@@ -543,7 +694,7 @@ export default function ResourceForkParser() {
           return `${spec.fourCC}:${specStr}:${description}`;
         });
 
-        const rsrcData = saveFromJson(jsonData, structSpecs, false);
+        const rsrcData = saveFromJson(jsonData, structSpecs, [], []);
 
         // Download as .rsrc file
         // Ensure we pass an ArrayBuffer to Blob by wrapping the data in a Uint8Array
@@ -572,43 +723,75 @@ export default function ResourceForkParser() {
 
   // Download JSON
   const downloadJson = useCallback(() => {
-    if (!parsedResult?.data) return;
+    if (!parsedResult?.data) {
+      error("No parsed data available for download");
+      return;
+    }
 
-    const blob = new Blob([JSON.stringify(parsedResult.data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${parsedResult.filename || "parsed"}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [parsedResult]);
+    try {
+      const blob = new Blob([JSON.stringify(parsedResult.data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${parsedResult.filename || "parsed"}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      success({
+        title: "JSON Downloaded",
+        description: "Resource fork data has been exported to JSON"
+      });
+    } catch (err) {
+      error({
+        title: "Download Failed",
+        description: "Failed to generate JSON file"
+      });
+    }
+  }, [parsedResult, success, error]);
 
   // Save specifications to file
   const saveSpecifications = useCallback(() => {
-    const specs = fourLetterCodes
-      .map((spec) => {
-        const structSpec = generateStructSpec(spec);
-        const description = spec.dataTypes
-          .map((dt) => dt.description)
-          .join(",");
-        return `${spec.fourCC}:${structSpec}:${description}`;
-      })
-      .join("\n");
+    if (fourLetterCodes.length === 0) {
+      warning("No specifications to save");
+      return;
+    }
 
-    const blob = new Blob([specs], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "specifications.txt";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [fourLetterCodes, generateStructSpec]);
+    try {
+      const specs = fourLetterCodes
+        .map((spec) => {
+          const structSpec = generateStructSpec(spec);
+          const description = spec.dataTypes
+            .map((dt) => dt.description)
+            .join(",");
+          return `${spec.fourCC}:${structSpec}:${description}`;
+        })
+        .join("\n");
+
+      const blob = new Blob([specs], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "specifications.txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      success({
+        title: "Specifications Saved",
+        description: "Struct specifications have been exported to text file"
+      });
+    } catch (err) {
+      error({
+        title: "Save Failed",
+        description: "Failed to generate specifications file"
+      });
+    }
+  }, [fourLetterCodes, generateStructSpec, success, error, warning]);
 
   // Load specifications from file
   const handleSpecUpload = useCallback(
@@ -1061,9 +1244,9 @@ export default function ResourceForkParser() {
               </CollapsibleContent>
             </Collapsible>
 
-            {/* Download JSON Button - Prominent */}
+            {/* Download Buttons - Prominent */}
             {parsedResult?.success && (
-              <div className="pt-6 border-t border-gray-700">
+              <div className="pt-6 border-t border-gray-700 space-y-3">
                 <Button
                   onClick={downloadJson}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg py-4"
@@ -1071,6 +1254,15 @@ export default function ResourceForkParser() {
                 >
                   <Download className="h-5 w-5 mr-2" />
                   Download as JSON
+                </Button>
+                <Button
+                  onClick={downloadTypeScript}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Code className="h-5 w-5 mr-2" />
+                  Download TypeScript Interfaces
                 </Button>
               </div>
             )}
@@ -1188,14 +1380,24 @@ export default function ResourceForkParser() {
                       <h4 className="font-medium text-gray-200">
                         Data Type Fields
                       </h4>
-                      <Button
-                        onClick={() => addDataTypeToSpec(specIndex)}
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Field
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => addDataTypeToSpec(specIndex)}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Field
+                        </Button>
+                        <Button
+                          onClick={() => addArrayFieldToSpec(specIndex)}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Array Field
+                        </Button>
+                      </div>
                     </div>
 
                     <Table>
@@ -1213,80 +1415,171 @@ export default function ResourceForkParser() {
                       </TableHeader>
                       <TableBody>
                         {spec.dataTypes.map((dataType) => (
-                          <TableRow
-                            key={dataType.id}
-                            className="border-gray-600"
-                          >
-                            <TableCell>
-                              <Select
-                                value={dataType.type}
-                                onValueChange={(value: any) =>
-                                  updateDataType(specIndex, dataType.id, {
-                                    type: value,
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="w-64 bg-gray-700 border-gray-600 text-white">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-gray-700 border-gray-600">
-                                  {DATA_TYPE_OPTIONS.map((option) => (
-                                    <SelectItem
-                                      key={option.value}
-                                      value={option.value}
-                                      className="text-white hover:bg-gray-600"
+                          <React.Fragment key={dataType.id}>
+                            <TableRow
+                              className={`border-gray-600 ${
+                                dataType.isArrayField ? "bg-gray-750" : ""
+                              }`}
+                            >
+                              <TableCell>
+                                {dataType.isArrayField ? (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      Array
+                                    </Badge>
+                                    <Select
+                                      value={dataType.type}
+                                      onValueChange={(value: any) =>
+                                        updateDataType(specIndex, dataType.id, {
+                                          type: value,
+                                        })
+                                      }
                                     >
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                value={dataType.count}
-                                onChange={(e) =>
-                                  updateDataType(specIndex, dataType.id, {
-                                    count: parseInt(e.target.value) || 1,
-                                  })
-                                }
-                                className="w-20 bg-gray-700 border-gray-600 text-white"
-                                min="1"
-                                disabled={
-                                  !(
-                                    dataType.type === "s" ||
-                                    dataType.type === "p" ||
-                                    dataType.type === "x"
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                value={dataType.description}
-                                onChange={(e) =>
-                                  updateDataType(specIndex, dataType.id, {
-                                    description: e.target.value,
-                                  })
-                                }
-                                className="w-48 bg-gray-700 border-gray-600 text-white"
-                                placeholder="Field description"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                onClick={() =>
-                                  removeDataTypeFromSpec(specIndex, dataType.id)
-                                }
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                disabled={spec.dataTypes.length === 1}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
+                                      <SelectTrigger className="w-48 bg-gray-600 border-gray-500 text-white">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-gray-700 border-gray-600">
+                                        {DATA_TYPE_OPTIONS.map((option) => (
+                                          <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                            className="text-white hover:bg-gray-600"
+                                          >
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                ) : (
+                                  <Select
+                                    value={dataType.type}
+                                    onValueChange={(value: any) =>
+                                      updateDataType(specIndex, dataType.id, {
+                                        type: value,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-64 bg-gray-700 border-gray-600 text-white">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-gray-700 border-gray-600">
+                                      {DATA_TYPE_OPTIONS.map((option) => (
+                                        <SelectItem
+                                          key={option.value}
+                                          value={option.value}
+                                          className="text-white hover:bg-gray-600"
+                                        >
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {dataType.isArrayField ? (
+                                  <Input
+                                    type="number"
+                                    value={dataType.arraySize || 100}
+                                    onChange={(e) =>
+                                      updateDataType(specIndex, dataType.id, {
+                                        arraySize: parseInt(e.target.value) || 1,
+                                      })
+                                    }
+                                    className="w-20 bg-gray-600 border-gray-500 text-white"
+                                    min="1"
+                                    placeholder="Size"
+                                  />
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    value={dataType.count}
+                                    onChange={(e) =>
+                                      updateDataType(specIndex, dataType.id, {
+                                        count: parseInt(e.target.value) || 1,
+                                      })
+                                    }
+                                    className="w-20 bg-gray-700 border-gray-600 text-white"
+                                    min="1"
+                                    disabled={
+                                      !(
+                                        dataType.type === "s" ||
+                                        dataType.type === "p" ||
+                                        dataType.type === "x"
+                                      )
+                                    }
+                                  />
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {dataType.isArrayField ? (
+                                  <div className="flex gap-2">
+                                    <Input
+                                      value={dataType.arrayPrefix || "x"}
+                                      onChange={(e) =>
+                                        updateDataType(specIndex, dataType.id, {
+                                          arrayPrefix: e.target.value,
+                                        })
+                                      }
+                                      className="w-16 bg-gray-600 border-gray-500 text-white"
+                                      placeholder="Prefix"
+                                    />
+                                    <span className="text-gray-300 self-center">`</span>
+                                    <Input
+                                      value={dataType.description}
+                                      onChange={(e) =>
+                                        updateDataType(specIndex, dataType.id, {
+                                          description: e.target.value,
+                                        })
+                                      }
+                                      className="w-24 bg-gray-600 border-gray-500 text-white"
+                                      placeholder="Field"
+                                    />
+                                    <span className="text-gray-300 self-center">[{dataType.arraySize || 100}]</span>
+                                  </div>
+                                ) : (
+                                  <Input
+                                    value={dataType.description}
+                                    onChange={(e) =>
+                                      updateDataType(specIndex, dataType.id, {
+                                        description: e.target.value,
+                                      })
+                                    }
+                                    className="w-48 bg-gray-700 border-gray-600 text-white"
+                                    placeholder="Field description"
+                                  />
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  onClick={() =>
+                                    removeDataTypeFromSpec(specIndex, dataType.id)
+                                  }
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  disabled={spec.dataTypes.length === 1}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                            {dataType.isArrayField && (
+                              <TableRow className="border-gray-600">
+                                <TableCell colSpan={4}>
+                                  <div className="bg-gray-700 p-3 rounded text-sm text-gray-300">
+                                    <div className="font-medium mb-1">Array Field Configuration:</div>
+                                    <div className="text-gray-400">
+                                      This creates indexed fields like:{" "}
+                                      <code className="bg-gray-800 px-1 rounded">
+                                        {dataType.arrayPrefix || "x"}_0, {dataType.description}_0, {dataType.arrayPrefix || "x"}_1, {dataType.description}_1, ...
+                                      </code>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
                         ))}
                       </TableBody>
                     </Table>
