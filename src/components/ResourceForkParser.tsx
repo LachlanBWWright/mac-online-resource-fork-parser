@@ -1,5 +1,8 @@
 import React, { useState, useCallback, useRef } from "react";
-import { saveToJson, saveFromJson } from "../lib/rsrcdump/rsrcdump";
+import {
+  saveToJson,
+  saveFromJson,
+} from "../exten/rsrcdump/rsrcdump-ts/src/rsrcdump";
 import {
   Card,
   CardContent,
@@ -388,11 +391,9 @@ export default function ResourceForkParser() {
             const fourCC = parts[0];
             const structSpec = parts[1] || "";
             const namesPart = parts.slice(2).join(":") || ""; // join remainder in case descriptions contain ':'
+            // Preserve empty tokens so consecutive commas indicate a missing name.
             const nameTokens = namesPart
-              ? namesPart
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
+              ? namesPart.split(",").map((s) => s.trim())
               : [];
 
             const dataTypes: DataTypeField[] = [];
@@ -417,7 +418,10 @@ export default function ResourceForkParser() {
                   const desc =
                     type === "x"
                       ? ""
-                      : nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                      : nameTokens[nameIndex] &&
+                        nameTokens[nameIndex].length > 0
+                      ? nameTokens[nameIndex]
+                      : `field_${fieldIndex}`;
                   if (type !== "x") nameIndex++;
                   dataTypes.push({
                     id: fieldIndex.toString(),
@@ -429,7 +433,10 @@ export default function ResourceForkParser() {
                 } else {
                   // expand numeric prefix into multiple single-count fields
                   for (let i = 0; i < count; i++) {
-                    const desc = nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                    const desc =
+                      nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                        ? nameTokens[nameIndex]
+                        : `field_${fieldIndex}`;
                     nameIndex++;
                     dataTypes.push({
                       id: fieldIndex.toString(),
@@ -446,7 +453,9 @@ export default function ResourceForkParser() {
                 const desc =
                   type === "x"
                     ? ""
-                    : nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                    : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                    ? nameTokens[nameIndex]
+                    : `field_${fieldIndex}`;
                 if (type !== "x") nameIndex++;
                 dataTypes.push({
                   id: fieldIndex.toString(),
@@ -616,11 +625,9 @@ export default function ResourceForkParser() {
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
           const namesPart = parts.slice(2).join(":") || "";
+          // Preserve empty tokens so consecutive commas indicate a missing name.
           const nameTokens = namesPart
-            ? namesPart
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
+            ? namesPart.split(",").map((s) => s.trim())
             : [];
 
           const rawSpec = structSpec || "";
@@ -644,7 +651,9 @@ export default function ResourceForkParser() {
                 const desc =
                   type === "x"
                     ? ""
-                    : nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                    : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                    ? nameTokens[nameIndex]
+                    : `field_${fieldIndex}`;
                 if (type !== "x") nameIndex++;
                 dataTypes.push({
                   id: fieldIndex.toString(),
@@ -655,7 +664,10 @@ export default function ResourceForkParser() {
                 fieldIndex++;
               } else {
                 for (let i = 0; i < count; i++) {
-                  const desc = nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                  const desc =
+                    nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                      ? nameTokens[nameIndex]
+                      : `field_${fieldIndex}`;
                   nameIndex++;
                   dataTypes.push({
                     id: fieldIndex.toString(),
@@ -672,7 +684,9 @@ export default function ResourceForkParser() {
               const desc =
                 type === "x"
                   ? ""
-                  : nameTokens[nameIndex] ?? `field_${fieldIndex}`;
+                  : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                  ? nameTokens[nameIndex]
+                  : `field_${fieldIndex}`;
               if (type !== "x") nameIndex++;
               dataTypes.push({
                 id: fieldIndex.toString(),
