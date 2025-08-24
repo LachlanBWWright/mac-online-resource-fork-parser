@@ -1,8 +1,8 @@
-import ResourceForkParser from './components/ResourceForkParserRedesigned'
-import './App.css'
+import ResourceForkParser from "./components/ResourceForkParser";
+import "./App.css";
 
 function App() {
-  return <ResourceForkParser />
+  return <ResourceForkParser />;
 }
 
-export default App
+export default App;
