@@ -65,6 +65,11 @@ interface FourLetterCodeSpec {
   sampleData?: any;
 }
 
+interface ArrayFieldSpec {
+  name: string;
+  type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
+}
+
 interface DataTypeField {
   id: string;
   type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
@@ -72,7 +77,7 @@ interface DataTypeField {
   description: string;
   isArrayField?: boolean;
   arraySize?: number;
-  arrayPrefix?: string;
+  arrayFields?: ArrayFieldSpec[]; // Array of field specs with individual types
 }
 
 const DATA_TYPE_OPTIONS = [
@@ -153,9 +158,11 @@ export default function ResourceForkParser() {
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
-      if (dataType.isArrayField && dataType.arraySize && dataType.arrayPrefix) {
-        // Handle array field like x`y[100] 
-        result += `${dataType.arrayPrefix}\`${dataType.description}[${dataType.arraySize}]`;
+      if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
+        // Handle array field like x`y[100] with individual types for each field
+        const fieldSpecs = dataType.arrayFields.map(field => field.type).join(' ');
+        const fieldNames = dataType.arrayFields.map(field => field.name).join('`');
+        result += `${fieldSpecs} ${fieldNames}[${dataType.arraySize}]`;
       } else if (dataType.count > 1) {
         result += `${dataType.count}${dataType.type}`;
       } else {
@@ -497,17 +504,20 @@ export default function ResourceForkParser() {
         id: newId,
         type: "i",
         count: 1,
-        description: "y",
+        description: "array_field",
         isArrayField: true,
         arraySize: 100,
-        arrayPrefix: "x",
+        arrayFields: [
+          { name: "x", type: "i" as const },
+          { name: "y", type: "i" as const }
+        ], // Default to x and y with integer types
       });
       setFourLetterCodes(updatedSpecs);
       reParseWithUpdatedSpecs(updatedSpecs);
       
       info({
         title: "Array Field Added",
-        description: "Added an array field. Configure the prefix, field name, and size."
+        description: "Added an array field. Configure the field names and size."
       });
     },
     [fourLetterCodes, reParseWithUpdatedSpecs, info],
@@ -694,7 +704,7 @@ export default function ResourceForkParser() {
           return `${spec.fourCC}:${specStr}:${description}`;
         });
 
-        const rsrcData = saveFromJson(jsonData, structSpecs, [], []);
+        const rsrcData = saveFromJson(jsonData, structSpecs);
 
         // Download as .rsrc file
         // Ensure we pass an ArrayBuffer to Blob by wrapping the data in a Uint8Array
@@ -913,184 +923,109 @@ export default function ResourceForkParser() {
     }
   };
 
-  const formatSampleData = (sampleData: any): string => {
-    if (!sampleData) return "-";
-
-    // Handle different data structures based on the comment requirements:
-    // 4 letter code → number → data sample with field names
-    // If error: show "conversionError" field
-    // If no struct specs: show "data" field with hex-encoded data
-    // If successfully parsed: show "obj" field(s)
-
-    const previewObj = (obj: Record<string, any>) => {
-      const entries = Object.entries(obj || {})
-        .slice(0, 5)
-        .map(([k, v]) => {
-          if (Array.isArray(v)) return `${k}: [${v.length} items]`;
-          if (v && typeof v === "object") return `${k}: {…}`;
-          return `${k}: ${JSON.stringify(v)}`;
-        });
-      return `{${entries.join(", ")}${
-        Object.keys(obj || {}).length > 5 ? "..." : ""
-      }}`;
-    };
-
-    if (Array.isArray(sampleData)) {
-      if (sampleData.length === 0) return "Empty array";
-
-      // If any item has a conversionError, show the first
-      for (const item of sampleData) {
-        if (item && item.conversionError)
-          return `Error: ${item.conversionError}`;
-      }
-
-      // Prefer parsed objects
-      const objItems = sampleData.filter((item) => item && item.obj);
-      if (objItems.length > 0) {
-        // Show count and a preview of the first object's keys/values
-        const firstObj = objItems[0].obj;
-        if (typeof firstObj === "object") {
-          return `${objItems.length} object${
-            objItems.length > 1 ? "s" : ""
-          }: ${previewObj(firstObj)}`;
-        }
-        return `${objItems.length} object${
-          objItems.length > 1 ? "s" : ""
-        }: ${JSON.stringify(firstObj)}`;
-      }
-
-      // If raw data is present (no struct specs), show hex preview
-      for (const item of sampleData) {
-        if (item && item.data) {
-          const hexData = item.data as string;
-          return `Raw data: ${
-            hexData.length > 40 ? hexData.substring(0, 40) + "..." : hexData
-          }`;
-        }
-      }
-
-      // Fallback: show structure of first item
-      const firstItem = sampleData[0];
-      if (firstItem && typeof firstItem === "object") {
-        return `Array[${sampleData.length}]: ${previewObj(firstItem)}`;
-      }
-      return `Array[${sampleData.length}]: ${JSON.stringify(firstItem)}`;
-    }
-
-    if (typeof sampleData === "object") {
-      if (sampleData.conversionError)
-        return `Error: ${sampleData.conversionError}`;
-
-      if (sampleData.data) {
-        const hexData = sampleData.data as string;
-        return `Raw data: ${
-          hexData.length > 40 ? hexData.substring(0, 40) + "..." : hexData
-        }`;
-      }
-
-      if (sampleData.obj) {
-        const obj = sampleData.obj;
-        if (typeof obj === "object") return previewObj(obj);
-        return JSON.stringify(obj);
-      }
-
-      const keys = Object.keys(sampleData);
-      if (keys.length === 0) return "Empty object";
-      return `{${keys.slice(0, 5).join(", ")}${keys.length > 5 ? "..." : ""}}`;
-    }
-
-    return JSON.stringify(sampleData);
-  };
-
   const renderSampleDataUI = (sampleData: any) => {
     if (!sampleData) return <span className="text-gray-400">-</span>;
     console.log("sampledata", sampleData);
-    const renderJson = (obj: any) => (
-      <pre className="text-sm text-gray-200 bg-gray-800 p-3 rounded overflow-x-auto">
-        {JSON.stringify(obj)}
-      </pre>
+    
+    const renderJson = (obj: any, title?: string) => (
+      <div className="bg-gray-900 p-2 rounded">
+        {title && <div className="text-xs text-gray-400 mb-1">{title}:</div>}
+        <pre className="text-sm text-gray-200 overflow-x-auto">
+          {JSON.stringify(obj, null, 2)}
+        </pre>
+      </div>
     );
 
+    // Handle object with resource IDs (e.g., {1000: {name: "...", order: 1000, obj: {...}}})
+    if (typeof sampleData === "object" && !Array.isArray(sampleData)) {
+      const resourceIds = Object.keys(sampleData);
+      if (resourceIds.length === 0) {
+        return <div className="text-gray-400">No resource data</div>;
+      }
+
+      return (
+        <div className="space-y-2">
+          <div className="text-gray-300">
+            Resources found: {resourceIds.length}
+          </div>
+          {resourceIds.slice(0, 3).map((resourceId) => {
+            const resource = sampleData[resourceId];
+            if (!resource) return null;
+            
+            return (
+              <div key={resourceId} className="border border-gray-600 rounded p-2">
+                <div className="text-sm text-gray-300 mb-2">
+                  Resource ID: {resourceId}
+                  {resource.name && <span> | Name: {resource.name}</span>}
+                  {resource.order && <span> | Order: {resource.order}</span>}
+                </div>
+                
+                {resource.conversionError && (
+                  <div className="text-red-300 mb-2">
+                    <strong>Conversion Error:</strong> {resource.conversionError}
+                  </div>
+                )}
+                
+                {resource.obj && renderJson(resource.obj, "Parsed Object")}
+                
+                {resource.data && !resource.obj && (
+                  <div className="text-gray-200">
+                    <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
+                    <code className="break-all text-sm bg-gray-800 p-2 rounded block">
+                      {(resource.data as string).length > 200
+                        ? (resource.data as string).substring(0, 200) + "..."
+                        : resource.data}
+                    </code>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {resourceIds.length > 3 && (
+            <div className="text-gray-400">Showing first 3 resources...</div>
+          )}
+        </div>
+      );
+    }
+
+    // Handle array of resources (legacy support)
     if (Array.isArray(sampleData)) {
       if (sampleData.length === 0)
         return <div className="text-gray-400">Empty array</div>;
 
-      // If any item has conversionError, show first
-      const errItem = sampleData.find((it) => it && it.conversionError);
-      if (errItem)
-        return (
-          <div className="text-red-300">Error: {errItem.conversionError}</div>
-        );
-
-      // Prefer objects with obj
-      const objItems = sampleData.filter((it) => it && it.obj);
-      if (objItems.length > 0) {
-        return (
-          <div className="space-y-2">
-            <div className="text-gray-300">
-              Parsed objects: {objItems.length}
+      return (
+        <div className="space-y-2">
+          <div className="text-gray-300">
+            Array items: {sampleData.length}
+          </div>
+          {sampleData.slice(0, 3).map((item: any, idx: number) => (
+            <div key={idx} className="border border-gray-600 rounded p-2">
+              {item.conversionError && (
+                <div className="text-red-300 mb-2">
+                  Error: {item.conversionError}
+                </div>
+              )}
+              {item.obj && renderJson(item.obj, `Item ${idx + 1} - Parsed Object`)}
+              {item.data && !item.obj && (
+                <div className="text-gray-200">
+                  <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
+                  <code className="break-all text-sm bg-gray-800 p-2 rounded block">
+                    {(item.data as string).length > 200
+                      ? (item.data as string).substring(0, 200) + "..."
+                      : item.data}
+                  </code>
+                </div>
+              )}
             </div>
-            {objItems.slice(0, 3).map((it: any, idx: number) => (
-              <div key={idx} className="bg-gray-900 p-2 rounded">
-                {renderJson(it.obj)}
-              </div>
-            ))}
-            {objItems.length > 3 && (
-              <div className="text-gray-400">Showing first 3 objects...</div>
-            )}
-          </div>
-        );
-      }
-
-      // Raw data
-      const dataItem = sampleData.find((it) => it && it.data);
-      if (dataItem) {
-        const hexData = dataItem.data as string;
-        return (
-          <div className="text-gray-200">
-            Raw data:{" "}
-            <code className="break-all">
-              {hexData.length > 200
-                ? hexData.substring(0, 200) + "..."
-                : hexData}
-            </code>
-          </div>
-        );
-      }
-
-      // Fallback
-      return (
-        <div className="text-gray-200">{formatSampleData(sampleData)}</div>
+          ))}
+          {sampleData.length > 3 && (
+            <div className="text-gray-400">Showing first 3 items...</div>
+          )}
+        </div>
       );
     }
 
-    if (typeof sampleData === "object") {
-      if (sampleData.conversionError)
-        return (
-          <div className="text-red-300">
-            Error: {sampleData.conversionError}
-          </div>
-        );
-      if (sampleData.data) {
-        const hexData = sampleData.data as string;
-        return (
-          <div className="text-gray-200">
-            Raw data:{" "}
-            <code className="break-all">
-              {hexData.length > 200
-                ? hexData.substring(0, 200) + "..."
-                : hexData}
-            </code>
-          </div>
-        );
-      }
-      if (sampleData.obj) return renderJson(sampleData.obj);
-
-      return (
-        <div className="text-gray-200">{formatSampleData(sampleData)}</div>
-      );
-    }
-
+    // Fallback for simple values
     return <div className="text-gray-200">{String(sampleData)}</div>;
   };
 
@@ -1098,7 +1033,7 @@ export default function ResourceForkParser() {
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-white">
             Mac Resource Fork Parser
           </h1>
@@ -1106,6 +1041,16 @@ export default function ResourceForkParser() {
             Upload a resource fork file to analyze and experiment with data
             types
           </p>
+          <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
+            <div className="flex items-center gap-2 text-yellow-200">
+              <AlertTriangle className="h-5 w-5" />
+              <span className="font-medium">Work In Progress</span>
+            </div>
+            <p className="text-yellow-100 text-sm mt-1">
+              This application is under active development. Features may be incomplete, 
+              and parsing results should be verified. Use with caution for production data.
+            </p>
+          </div>
         </div>
 
         {/* File Operations & Specifications - Combined */}
@@ -1514,29 +1459,79 @@ export default function ResourceForkParser() {
                               </TableCell>
                               <TableCell>
                                 {dataType.isArrayField ? (
-                                  <div className="flex gap-2">
-                                    <Input
-                                      value={dataType.arrayPrefix || "x"}
-                                      onChange={(e) =>
+                                  <div className="space-y-3 bg-gray-700 p-3 rounded">
+                                    <div className="text-sm text-gray-300 font-medium">Array Field Configuration:</div>
+                                    {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((arrayField, idx) => (
+                                      <div key={idx} className="flex gap-2 items-center bg-gray-600 p-2 rounded">
+                                        <Input
+                                          value={arrayField.name}
+                                          onChange={(e) => {
+                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
+                                            newArrayFields[idx] = { ...newArrayFields[idx], name: e.target.value };
+                                            updateDataType(specIndex, dataType.id, {
+                                              arrayFields: newArrayFields,
+                                            });
+                                          }}
+                                          className="w-24 bg-gray-700 border-gray-500 text-white"
+                                          placeholder="Field name"
+                                        />
+                                        <Select
+                                          value={arrayField.type}
+                                          onValueChange={(value: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p") => {
+                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
+                                            newArrayFields[idx] = { ...newArrayFields[idx], type: value };
+                                            updateDataType(specIndex, dataType.id, {
+                                              arrayFields: newArrayFields,
+                                            });
+                                          }}
+                                        >
+                                          <SelectTrigger className="w-40 bg-gray-700 border-gray-500 text-white">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-gray-800 border-gray-600">
+                                            {DATA_TYPE_OPTIONS.map((option) => (
+                                              <SelectItem
+                                                key={option.value}
+                                                value={option.value}
+                                                className="text-white hover:bg-gray-700"
+                                              >
+                                                {option.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <Button
+                                          onClick={() => {
+                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
+                                            newArrayFields.splice(idx, 1);
+                                            updateDataType(specIndex, dataType.id, {
+                                              arrayFields: newArrayFields.length > 0 ? newArrayFields : [{ name: "field", type: "i" as const }]
+                                            });
+                                          }}
+                                          size="sm"
+                                          className="bg-red-500 hover:bg-red-600 text-white h-8 w-8 p-0"
+                                          disabled={(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length <= 1}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                    <Button
+                                      onClick={() => {
+                                        const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]), { name: "newField", type: "i" as const }];
                                         updateDataType(specIndex, dataType.id, {
-                                          arrayPrefix: e.target.value,
-                                        })
-                                      }
-                                      className="w-16 bg-gray-600 border-gray-500 text-white"
-                                      placeholder="Prefix"
-                                    />
-                                    <span className="text-gray-300 self-center">`</span>
-                                    <Input
-                                      value={dataType.description}
-                                      onChange={(e) =>
-                                        updateDataType(specIndex, dataType.id, {
-                                          description: e.target.value,
-                                        })
-                                      }
-                                      className="w-24 bg-gray-600 border-gray-500 text-white"
-                                      placeholder="Field"
-                                    />
-                                    <span className="text-gray-300 self-center">[{dataType.arraySize || 100}]</span>
+                                          arrayFields: newArrayFields,
+                                        });
+                                      }}
+                                      size="sm"
+                                      className="bg-green-500 hover:bg-green-600 text-white text-xs"
+                                    >
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Add Field
+                                    </Button>
+                                    <div className="text-xs text-gray-400">
+                                      [{dataType.arraySize || 100}] repetitions each
+                                    </div>
                                   </div>
                                 ) : (
                                   <Input
@@ -1568,12 +1563,22 @@ export default function ResourceForkParser() {
                               <TableRow className="border-gray-600">
                                 <TableCell colSpan={4}>
                                   <div className="bg-gray-700 p-3 rounded text-sm text-gray-300">
-                                    <div className="font-medium mb-1">Array Field Configuration:</div>
+                                    <div className="font-medium mb-1">Array Field Preview:</div>
                                     <div className="text-gray-400">
                                       This creates indexed fields like:{" "}
                                       <code className="bg-gray-800 px-1 rounded">
-                                        {dataType.arrayPrefix || "x"}_0, {dataType.description}_0, {dataType.arrayPrefix || "x"}_1, {dataType.description}_1, ...
+                                        {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((field, idx) => 
+                                          `${field.name}_0${idx < (dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length - 1 ? ", " : ""}`
+                                        ).join("")}, {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((field, idx) => 
+                                          `${field.name}_1${idx < (dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length - 1 ? ", " : ""}`
+                                        ).join("")}, ...
                                       </code>
+                                    </div>
+                                    <div className="text-gray-400 mt-1">
+                                      Total: {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length} field{(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length !== 1 ? "s" : ""} × {dataType.arraySize || 100} repetitions = {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length * (dataType.arraySize || 100)} total fields
+                                    </div>
+                                    <div className="text-gray-400 mt-1">
+                                      Field types: {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map(field => `${field.name}(${field.type})`).join(", ")}
                                     </div>
                                   </div>
                                 </TableCell>
