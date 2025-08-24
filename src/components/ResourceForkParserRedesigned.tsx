@@ -64,15 +64,16 @@ export default function ResourceForkParser() {
       const arrayBuffer = await file.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
       
-      // Parse with empty specs first to get the raw structure
-      const result = saveToJson(data, [], [], [], false);
+      // Parse with default otto specs enabled to get all available four-letter codes
+      const result = saveToJson(data, [], [], [], true);
       
       // Extract unique four-letter codes from the result
       const fourLetterCodesSet = new Set<string>();
       
       if (result && typeof result === 'object') {
         Object.keys(result).forEach(key => {
-          if (key.length === 4 && /^[A-Za-z0-9]{4}$/.test(key)) {
+          // Check for four-letter codes (excluding metadata)
+          if (key.length === 4 && /^[A-Za-z0-9]{4}$/.test(key) && key !== '_metadata') {
             fourLetterCodesSet.add(key);
           }
         });
@@ -276,40 +277,17 @@ export default function ResourceForkParser() {
       
       const arrayBuffer = await response.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
+      const file = new File([data], 'EarthFarm.ter.rsrc');
       
-      // Use default Otto Matic specs for EarthFarm
-      const earthFarmSpecs: FourLetterCodeSpec[] = [
-        {
-          fourCC: 'Hedr',
-          dataTypes: [
-            { id: '1', type: 'L', count: 5, description: 'header_data' },
-            { id: '2', type: 'i', count: 3, description: 'integers' },
-            { id: '3', type: 'f', count: 5, description: 'floats' },
-            { id: '4', type: 'i', count: 40, description: 'more_data' },
-            { id: '5', type: 'x', count: 40, description: 'padding' }
-          ],
-          isArray: false,
-          autoPadding: false,
-          status: 'valid' as const,
-          sampleData: null
-        },
-        {
-          fourCC: 'Layr',
-          dataTypes: [
-            { id: '1', type: 'i', count: 1, description: 'field_name' }
-          ],
-          isArray: true,
-          autoPadding: false,
-          status: 'valid' as const,
-          sampleData: null
-        }
-      ];
-      
-      // Parse with Otto Matic specs
-      const { result, updatedSpecs } = await parseWithSpecs(data, earthFarmSpecs);
+      // Extract all four-letter codes automatically
+      const extractedSpecs = await extractFourLetterCodes(file);
+      setFourLetterCodes(extractedSpecs);
+
+      // Parse with default specs to show initial samples
+      const { result, updatedSpecs } = await parseWithSpecs(data, extractedSpecs);
       
       setFourLetterCodes(updatedSpecs);
-      setCurrentFile(new File([data], 'EarthFarm.ter.rsrc'));
+      setCurrentFile(file);
       
       if (result) {
         setParsedResult({
@@ -329,7 +307,7 @@ export default function ResourceForkParser() {
     } finally {
       setIsProcessing(false);
     }
-  }, [parseWithSpecs]);
+  }, [extractFourLetterCodes, parseWithSpecs]);
 
   // Handle JSON upload
   const handleJsonUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -481,13 +459,83 @@ export default function ResourceForkParser() {
   const formatSampleData = (sampleData: any): string => {
     if (!sampleData) return '-';
     
+    // Handle different data structures based on the comment requirements:
+    // 4 letter code → number → data sample with field names
+    // If error: show "conversionError" field
+    // If no struct specs: show "data" field with hex-encoded data
+    // If successfully parsed: show "obj" field(s)
+    
     if (Array.isArray(sampleData)) {
       if (sampleData.length === 0) return 'Empty array';
-      if (sampleData.length === 1) return JSON.stringify(sampleData[0]);
-      return `Array[${sampleData.length}]: ${JSON.stringify(sampleData[0])}...`;
+      
+      // Show multiple obj fields if available
+      const objFields = sampleData.filter(item => item && typeof item === 'object' && item.obj);
+      if (objFields.length > 0) {
+        if (objFields.length === 1) {
+          const obj = objFields[0].obj;
+          if (typeof obj === 'object') {
+            const preview = Object.entries(obj).slice(0, 3)
+              .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+              .join(', ');
+            return `obj: {${preview}${Object.keys(obj).length > 3 ? '...' : ''}}`;
+          }
+          return `obj: ${JSON.stringify(obj)}`;
+        } else {
+          return `${objFields.length} objects with parsed data`;
+        }
+      }
+      
+      // Check for conversion errors
+      const errorItems = sampleData.filter(item => item && item.conversionError);
+      if (errorItems.length > 0) {
+        return `Error: ${errorItems[0].conversionError}`;
+      }
+      
+      // Check for raw data fields
+      const dataItems = sampleData.filter(item => item && item.data);
+      if (dataItems.length > 0) {
+        const hexData = dataItems[0].data;
+        return `Raw data: ${hexData.length > 20 ? hexData.substring(0, 20) + '...' : hexData}`;
+      }
+      
+      // Fallback to showing first item structure
+      const firstItem = sampleData[0];
+      if (typeof firstItem === 'object') {
+        const keys = Object.keys(firstItem);
+        return `Array[${sampleData.length}]: {${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
+      }
+      return `Array[${sampleData.length}]: ${JSON.stringify(firstItem)}`;
     }
     
     if (typeof sampleData === 'object') {
+      // Single object case
+      if (sampleData.conversionError) {
+        return `Error: ${sampleData.conversionError}`;
+      }
+      
+      if (sampleData.obj) {
+        const obj = sampleData.obj;
+        if (typeof obj === 'object') {
+          const preview = Object.entries(obj).slice(0, 3)
+            .map(([key, value]) => {
+              // Handle nested arrays in the object
+              if (Array.isArray(value)) {
+                return `${key}: [${value.length} items]`;
+              }
+              return `${key}: ${JSON.stringify(value)}`;
+            })
+            .join(', ');
+          return `obj: {${preview}${Object.keys(obj).length > 3 ? '...' : ''}}`;
+        }
+        return `obj: ${JSON.stringify(obj)}`;
+      }
+      
+      if (sampleData.data) {
+        const hexData = sampleData.data;
+        return `Raw data: ${hexData.length > 20 ? hexData.substring(0, 20) + '...' : hexData}`;
+      }
+      
+      // Show object keys
       const keys = Object.keys(sampleData);
       if (keys.length === 0) return 'Empty object';
       return `{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
@@ -507,66 +555,15 @@ export default function ResourceForkParser() {
           </p>
         </div>
 
-        {/* Save/Load Specifications - Collapsible */}
-        <Card className="bg-gray-800 border-gray-700">
-          <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-gray-700 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    <CardTitle className="text-white">Save & Load Specifications</CardTitle>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${saveLoadOpen ? 'rotate-180' : ''}`} />
-                </div>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="pt-0 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-300">Save Current Specifications</label>
-                    <Button
-                      onClick={saveSpecifications}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={fourLetterCodes.length === 0}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Save Specifications
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-300">Load Specifications from File</label>
-                    <Input
-                      type="file"
-                      accept=".txt"
-                      onChange={handleSpecUpload}
-                      ref={specFileInputRef}
-                      className="hidden"
-                    />
-                    <Button
-                      onClick={() => specFileInputRef.current?.click()}
-                      className="w-full bg-gray-600 hover:bg-gray-700 text-white"
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Load Specifications
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
-
-        {/* File Operations - Combined Upload/Download */}
+        {/* File Operations & Specifications - Combined */}
         <Card className="bg-gray-800 border-gray-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
               <FileText className="h-5 w-5" />
-              File Operations
+              File Operations & Specifications
             </CardTitle>
             <CardDescription className="text-gray-400">
-              Upload files to parse or convert, or try the sample file
+              Upload files to parse, manage specifications, or try the sample file
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -627,6 +624,55 @@ export default function ResourceForkParser() {
                 </Button>
               </div>
             </div>
+
+            {/* Specifications Management */}
+            <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
+              <CollapsibleTrigger asChild>
+                <div className="border-t border-gray-700 pt-6">
+                  <div className="flex items-center justify-between cursor-pointer hover:bg-gray-700 p-3 rounded transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      <span className="font-medium text-gray-200">Specification Management</span>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${saveLoadOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="pt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Save Current Specifications</label>
+                      <Button
+                        onClick={saveSpecifications}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                        disabled={fourLetterCodes.length === 0}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Save Specifications
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Load Specifications from File</label>
+                      <Input
+                        type="file"
+                        accept=".txt"
+                        onChange={handleSpecUpload}
+                        ref={specFileInputRef}
+                        className="hidden"
+                      />
+                      <Button
+                        onClick={() => specFileInputRef.current?.click()}
+                        className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Load Specifications
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Download JSON Button - Prominent */}
             {parsedResult?.success && (
