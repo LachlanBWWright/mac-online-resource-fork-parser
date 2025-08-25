@@ -41,46 +41,24 @@ import {
   Settings,
   Plus,
   Trash2,
-  Check,
   X,
   AlertTriangle,
   Code,
 } from "lucide-react";
 import { useToast } from "../lib/toast";
 
-interface ParsedResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  filename?: string;
-}
+// Import types from separate file
+import type { 
+  ParsedResult, 
+  FourLetterCodeSpec, 
+  DataTypeField, 
+  DataTypeOption
+} from "./resource-fork-parser/types";
+import StatusIcon from "./resource-fork-parser/StatusIcon";
+import SampleDataDisplay from "./resource-fork-parser/SampleDataDisplay";
+import { generateTypeScriptInterfaces } from "./resource-fork-parser/TypeScriptGenerator";
 
-interface FourLetterCodeSpec {
-  fourCC: string;
-  dataTypes: DataTypeField[];
-  isArray: boolean;
-  autoPadding: boolean;
-  status: "valid" | "error" | "warning";
-  statusMessage?: string;
-  sampleData?: any;
-}
-
-interface ArrayFieldSpec {
-  name: string;
-  type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
-}
-
-interface DataTypeField {
-  id: string;
-  type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
-  count: number;
-  description: string;
-  isArrayField?: boolean;
-  arraySize?: number;
-  arrayFields?: ArrayFieldSpec[]; // Array of field specs with individual types
-}
-
-const DATA_TYPE_OPTIONS = [
+const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
   { value: "l", label: "l - Signed Long (4 bytes)" },
   { value: "i", label: "i - Signed Int (4 bytes)" },
@@ -92,7 +70,7 @@ const DATA_TYPE_OPTIONS = [
   { value: "x", label: "x - Padding Byte (1 byte)" },
   { value: "s", label: "s - String" },
   { value: "p", label: "p - Pascal String" },
-] as const;
+];
 
 export default function ResourceForkParser() {
   const { success, error, warning, info } = useToast();
@@ -177,101 +155,7 @@ export default function ResourceForkParser() {
   }, []);
 
   // Generate TypeScript interfaces from parsed data
-  const generateTypeScriptInterfaces = useCallback(
-    (parsedData: any): string => {
-      if (!parsedData || typeof parsedData !== "object") {
-        return "// No data available for TypeScript generation";
-      }
-
-      const generateInterface = (
-        name: string,
-        data: any,
-        depth: number = 0,
-      ): string => {
-        const indent = "  ".repeat(depth);
-        let interfaceStr = `${indent}interface ${name} {\n`;
-
-        if (Array.isArray(data) && data.length > 0) {
-          // For arrays, use first item as template
-          const firstItem = data[0];
-          if (firstItem && typeof firstItem === "object") {
-            if (firstItem.obj) {
-              interfaceStr += generateInterfaceFields(firstItem.obj, depth + 1);
-            } else if (firstItem.conversionError) {
-              interfaceStr += `${indent}  conversionError: string;\n`;
-            } else if (firstItem.data) {
-              interfaceStr += `${indent}  data: string; // hex-encoded\n`;
-            } else {
-              interfaceStr += generateInterfaceFields(firstItem, depth + 1);
-            }
-          }
-        } else if (typeof data === "object") {
-          interfaceStr += generateInterfaceFields(data, depth + 1);
-        }
-
-        interfaceStr += `${indent}}\n\n`;
-        return interfaceStr;
-      };
-
-      const generateInterfaceFields = (obj: any, depth: number): string => {
-        const indent = "  ".repeat(depth);
-        let fields = "";
-
-        for (const [key, value] of Object.entries(obj)) {
-          if (key === "_metadata") continue;
-
-          const fieldType = getTypeScriptType(value);
-          fields += `${indent}${key}: ${fieldType};\n`;
-        }
-
-        return fields;
-      };
-
-      const getTypeScriptType = (value: any): string => {
-        if (value === null || value === undefined) return "any";
-        if (typeof value === "string") return "string";
-        if (typeof value === "number") return "number";
-        if (typeof value === "boolean") return "boolean";
-        if (Array.isArray(value)) {
-          if (value.length === 0) return "any[]";
-          const itemType = getTypeScriptType(value[0]);
-          return `${itemType}[]`;
-        }
-        if (typeof value === "object") return "any"; // Could be more specific
-        return "any";
-      };
-
-      let result = "// Generated TypeScript interfaces\n\n";
-
-      // Generate interfaces for each four-letter code
-      Object.keys(parsedData).forEach((fourCC) => {
-        if (fourCC !== "_metadata") {
-          const capitalizedName =
-            fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
-          result += generateInterface(
-            `${capitalizedName}Data`,
-            parsedData[fourCC],
-          );
-        }
-      });
-
-      // Generate main interface
-      result += "interface ResourceForkData {\n";
-      Object.keys(parsedData).forEach((fourCC) => {
-        if (fourCC !== "_metadata") {
-          const capitalizedName =
-            fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
-          result += `  ${fourCC}: ${capitalizedName}Data[];\n`;
-        }
-      });
-      result += "}\n\n";
-
-      result += "export type { ResourceForkData };\n";
-
-      return result;
-    },
-    [],
-  );
+  // TypeScript generator function moved to separate module - using imported generateTypeScriptInterfaces
 
   // Download TypeScript interfaces
   const downloadTypeScript = useCallback(() => {
@@ -930,127 +814,9 @@ export default function ResourceForkParser() {
     [reParseWithUpdatedSpecs],
   );
 
-  const getStatusIcon = (status: "valid" | "error" | "warning") => {
-    switch (status) {
-      case "valid":
-        return <Check className="h-4 w-4 text-green-500" />;
-      case "error":
-        return <X className="h-4 w-4 text-red-500" />;
-      case "warning":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      default:
-        return null;
-    }
-  };
+  // Function removed - now using StatusIcon component
 
-  const renderSampleDataUI = (sampleData: any) => {
-    if (!sampleData) return <span className="text-gray-400">-</span>;
-    console.log("sampledata", sampleData);
-
-    const renderJson = (obj: any, title?: string) => (
-      <div className="bg-gray-900 p-2 rounded">
-        {title && <div className="text-xs text-gray-400 mb-1">{title}:</div>}
-        <pre className="text-sm text-gray-200 overflow-x-auto max-h-80 min-h-0 overflow-y-auto">
-          {JSON.stringify(obj, null, 2)}
-        </pre>
-      </div>
-    );
-
-    // Handle object with resource IDs (e.g., {1000: {name: "...", order: 1000, obj: {...}}})
-    if (typeof sampleData === "object" && !Array.isArray(sampleData)) {
-      const resourceIds = Object.keys(sampleData);
-      if (resourceIds.length === 0) {
-        return <div className="text-gray-400">No resource data</div>;
-      }
-
-      return (
-        <div className="space-y-2">
-          <div className="text-gray-300">
-            Resources found: {resourceIds.length}
-          </div>
-          {resourceIds.slice(0, 3).map((resourceId) => {
-            const resource = sampleData[resourceId];
-            if (!resource) return null;
-
-            return (
-              <div
-                key={resourceId}
-                className="border border-gray-600 rounded p-2"
-              >
-                <div className="text-sm text-gray-300 mb-2">
-                  Resource ID: {resourceId}
-                  {resource.name && <span> | Name: {resource.name}</span>}
-                  {resource.order && <span> | Order: {resource.order}</span>}
-                </div>
-
-                {resource.conversionError && (
-                  <div className="text-red-300 mb-2">
-                    <strong>Conversion Error:</strong>{" "}
-                    {resource.conversionError}
-                  </div>
-                )}
-
-                {resource.obj && renderJson(resource.obj, "Parsed Object")}
-
-                {resource.data && !resource.obj && (
-                  <div className="text-gray-200">
-                    <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
-                    <code className="break-all text-sm bg-gray-800 p-2 rounded block">
-                      {(resource.data as string).length > 200
-                        ? (resource.data as string).substring(0, 200) + "..."
-                        : resource.data}
-                    </code>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {resourceIds.length > 3 && (
-            <div className="text-gray-400">Showing first 3 resources...</div>
-          )}
-        </div>
-      );
-    }
-
-    // Handle array of resources (legacy support)
-    if (Array.isArray(sampleData)) {
-      if (sampleData.length === 0)
-        return <div className="text-gray-400">Empty array</div>;
-
-      return (
-        <div className="space-y-2">
-          <div className="text-gray-300">Array items: {sampleData.length}</div>
-          {sampleData.slice(0, 3).map((item: any, idx: number) => (
-            <div key={idx} className="border border-gray-600 rounded p-2">
-              {item.conversionError && (
-                <div className="text-red-300 mb-2">
-                  Error: {item.conversionError}
-                </div>
-              )}
-              {item.obj &&
-                renderJson(item.obj, `Item ${idx + 1} - Parsed Object`)}
-              {item.data && !item.obj && (
-                <div className="text-gray-200">
-                  <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
-                  <code className="break-all text-sm bg-gray-800 p-2 rounded block">
-                    {(item.data as string).length > 200
-                      ? (item.data as string).substring(0, 200) + "..."
-                      : item.data}
-                  </code>
-                </div>
-              )}
-            </div>
-          ))}
-          {sampleData.length > 3 && (
-            <div className="text-gray-400">Showing first 3 items...</div>
-          )}
-        </div>
-      );
-    }
-
-    // Fallback for simple values
-    return <div className="text-gray-200">{String(sampleData)}</div>;
-  };
+  // Function removed - now using SampleDataDisplay component
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
@@ -1288,7 +1054,7 @@ export default function ResourceForkParser() {
                         {spec.fourCC}
                       </h3>
                       <div className="flex items-center gap-2">
-                        {getStatusIcon(spec.status)}
+                        <StatusIcon status={spec.status} />
                         <Badge
                           variant={
                             spec.status === "valid"
@@ -1339,7 +1105,7 @@ export default function ResourceForkParser() {
                       <h4 className="font-medium text-gray-300 max-h-40 min-h-0 overflow-y-auto">
                         Sample Data:
                       </h4>
-                      <div>{renderSampleDataUI(spec.sampleData)}</div>
+                      <SampleDataDisplay sampleData={spec.sampleData} />
                     </div>
                   )}
 
