@@ -2,11 +2,38 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ResourceForkParser from "../components/ResourceForkParser";
 
+// Mock File constructor to support arrayBuffer method
+class MockFile extends File {
+  constructor(bits: BlobPart[], name: string, options?: FilePropertyBag) {
+    super(bits, name, options);
+  }
+
+  arrayBuffer(): Promise<ArrayBuffer> {
+    const buffer = new ArrayBuffer(100);
+    return Promise.resolve(buffer);
+  }
+}
+
+// Replace global File with MockFile
+(global as any).File = MockFile;
+
 // Mock the rsrcdump library
-vi.mock("../lib/rsrcdump/rsrcdump", () => ({
+vi.mock("../exten/rsrcdump/rsrcdump-ts/src/rsrcdump", () => ({
   saveToJson: vi.fn(() => ({
-    Hedr: { 1000: "test data" },
-    Layr: { 1000: "layer data" },
+    Hedr: { 
+      1000: { 
+        name: "test data", 
+        order: 1000, 
+        obj: { field1: 123, field2: "test" } 
+      } 
+    },
+    Layr: { 
+      1000: { 
+        name: "layer data", 
+        order: 1000, 
+        obj: { layerType: 1, depth: 100 } 
+      } 
+    },
   })),
   saveFromJson: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
 }));
@@ -32,8 +59,7 @@ describe("ResourceForkParser", () => {
         "Upload a resource fork file to analyze and experiment with data types",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Save & Load Specifications")).toBeInTheDocument();
-    expect(screen.getByText("File Operations")).toBeInTheDocument();
+    expect(screen.getByText("File Operations & Specifications")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Choose \.rsrc File/i }),
     ).toBeInTheDocument();
@@ -56,7 +82,7 @@ describe("ResourceForkParser", () => {
   it("has save/load specifications in a collapsible section", () => {
     render(<ResourceForkParser />);
 
-    const saveLoadSection = screen.getByText("Save & Load Specifications");
+    const saveLoadSection = screen.getByText("Specification Management");
     expect(saveLoadSection).toBeInTheDocument();
 
     // Should be inside a collapsible card
@@ -145,7 +171,7 @@ describe("ResourceForkParser", () => {
   it("combines upload/download in single file operations box", () => {
     render(<ResourceForkParser />);
 
-    const fileOpsSection = screen.getByText("File Operations").closest("div");
+    const fileOpsSection = screen.getByText("File Operations & Specifications").closest("div");
     expect(fileOpsSection).toBeInTheDocument();
 
     // Should contain all upload options and download in one section
