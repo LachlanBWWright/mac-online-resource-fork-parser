@@ -1158,36 +1158,8 @@ export default function ResourceForkParser() {
                             >
                               <TableCell>
                                 {dataType.isArrayField ? (
-                                  <div className="flex items-center gap-2">
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      Array
-                                    </Badge>
-                                    <Select
-                                      value={dataType.type}
-                                      onValueChange={(value: any) =>
-                                        updateDataType(specIndex, dataType.id, {
-                                          type: value,
-                                        })
-                                      }
-                                    >
-                                      <SelectTrigger className="w-48 bg-gray-600 border-gray-500 text-white">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-gray-700 border-gray-600">
-                                        {DATA_TYPE_OPTIONS.map((option) => (
-                                          <SelectItem
-                                            key={option.value}
-                                            value={option.value}
-                                            className="text-white hover:bg-gray-600"
-                                          >
-                                            {option.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
+                                  <div className="text-gray-400 italic">
+                                    Array Field (see configuration below)
                                   </div>
                                 ) : (
                                   <Select
@@ -1217,19 +1189,7 @@ export default function ResourceForkParser() {
                               </TableCell>
                               <TableCell>
                                 {dataType.isArrayField ? (
-                                  <Input
-                                    type="number"
-                                    value={dataType.arraySize || 100}
-                                    onChange={(e) =>
-                                      updateDataType(specIndex, dataType.id, {
-                                        arraySize:
-                                          parseInt(e.target.value) || 1,
-                                      })
-                                    }
-                                    className="w-20 bg-gray-600 border-gray-500 text-white"
-                                    min="1"
-                                    placeholder="Size"
-                                  />
+                                  <div className="text-gray-400">-</div>
                                 ) : (
                                   <Input
                                     type="number"
