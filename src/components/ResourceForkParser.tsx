@@ -160,8 +160,12 @@ export default function ResourceForkParser() {
     for (const dataType of spec.dataTypes) {
       if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
         // Handle array field like x`y[100] with individual types for each field
-        const fieldSpecs = dataType.arrayFields.map(field => field.type).join(' ');
-        const fieldNames = dataType.arrayFields.map(field => field.name).join('`');
+        const fieldSpecs = dataType.arrayFields
+          .map((field) => field.type)
+          .join(" ");
+        const fieldNames = dataType.arrayFields
+          .map((field) => field.name)
+          .join("`");
         result += `${fieldSpecs} ${fieldNames}[${dataType.arraySize}]`;
       } else if (dataType.count > 1) {
         result += `${dataType.count}${dataType.type}`;
@@ -173,89 +177,101 @@ export default function ResourceForkParser() {
   }, []);
 
   // Generate TypeScript interfaces from parsed data
-  const generateTypeScriptInterfaces = useCallback((parsedData: any): string => {
-    if (!parsedData || typeof parsedData !== 'object') {
-      return "// No data available for TypeScript generation";
-    }
+  const generateTypeScriptInterfaces = useCallback(
+    (parsedData: any): string => {
+      if (!parsedData || typeof parsedData !== "object") {
+        return "// No data available for TypeScript generation";
+      }
 
-    const generateInterface = (name: string, data: any, depth: number = 0): string => {
-      const indent = "  ".repeat(depth);
-      let interfaceStr = `${indent}interface ${name} {\n`;
-      
-      if (Array.isArray(data) && data.length > 0) {
-        // For arrays, use first item as template
-        const firstItem = data[0];
-        if (firstItem && typeof firstItem === 'object') {
-          if (firstItem.obj) {
-            interfaceStr += generateInterfaceFields(firstItem.obj, depth + 1);
-          } else if (firstItem.conversionError) {
-            interfaceStr += `${indent}  conversionError: string;\n`;
-          } else if (firstItem.data) {
-            interfaceStr += `${indent}  data: string; // hex-encoded\n`;
-          } else {
-            interfaceStr += generateInterfaceFields(firstItem, depth + 1);
+      const generateInterface = (
+        name: string,
+        data: any,
+        depth: number = 0,
+      ): string => {
+        const indent = "  ".repeat(depth);
+        let interfaceStr = `${indent}interface ${name} {\n`;
+
+        if (Array.isArray(data) && data.length > 0) {
+          // For arrays, use first item as template
+          const firstItem = data[0];
+          if (firstItem && typeof firstItem === "object") {
+            if (firstItem.obj) {
+              interfaceStr += generateInterfaceFields(firstItem.obj, depth + 1);
+            } else if (firstItem.conversionError) {
+              interfaceStr += `${indent}  conversionError: string;\n`;
+            } else if (firstItem.data) {
+              interfaceStr += `${indent}  data: string; // hex-encoded\n`;
+            } else {
+              interfaceStr += generateInterfaceFields(firstItem, depth + 1);
+            }
           }
+        } else if (typeof data === "object") {
+          interfaceStr += generateInterfaceFields(data, depth + 1);
         }
-      } else if (typeof data === 'object') {
-        interfaceStr += generateInterfaceFields(data, depth + 1);
-      }
-      
-      interfaceStr += `${indent}}\n\n`;
-      return interfaceStr;
-    };
 
-    const generateInterfaceFields = (obj: any, depth: number): string => {
-      const indent = "  ".repeat(depth);
-      let fields = "";
-      
-      for (const [key, value] of Object.entries(obj)) {
-        if (key === '_metadata') continue;
-        
-        const fieldType = getTypeScriptType(value);
-        fields += `${indent}${key}: ${fieldType};\n`;
-      }
-      
-      return fields;
-    };
+        interfaceStr += `${indent}}\n\n`;
+        return interfaceStr;
+      };
 
-    const getTypeScriptType = (value: any): string => {
-      if (value === null || value === undefined) return "any";
-      if (typeof value === "string") return "string";
-      if (typeof value === "number") return "number";
-      if (typeof value === "boolean") return "boolean";
-      if (Array.isArray(value)) {
-        if (value.length === 0) return "any[]";
-        const itemType = getTypeScriptType(value[0]);
-        return `${itemType}[]`;
-      }
-      if (typeof value === "object") return "any"; // Could be more specific
-      return "any";
-    };
+      const generateInterfaceFields = (obj: any, depth: number): string => {
+        const indent = "  ".repeat(depth);
+        let fields = "";
 
-    let result = "// Generated TypeScript interfaces\n\n";
-    
-    // Generate interfaces for each four-letter code
-    Object.keys(parsedData).forEach(fourCC => {
-      if (fourCC !== '_metadata') {
-        const capitalizedName = fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
-        result += generateInterface(`${capitalizedName}Data`, parsedData[fourCC]);
-      }
-    });
+        for (const [key, value] of Object.entries(obj)) {
+          if (key === "_metadata") continue;
 
-    // Generate main interface
-    result += "interface ResourceForkData {\n";
-    Object.keys(parsedData).forEach(fourCC => {
-      if (fourCC !== '_metadata') {
-        const capitalizedName = fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
-        result += `  ${fourCC}: ${capitalizedName}Data[];\n`;
-      }
-    });
-    result += "}\n\n";
+          const fieldType = getTypeScriptType(value);
+          fields += `${indent}${key}: ${fieldType};\n`;
+        }
 
-    result += "export type { ResourceForkData };\n";
-    
-    return result;
-  }, []);
+        return fields;
+      };
+
+      const getTypeScriptType = (value: any): string => {
+        if (value === null || value === undefined) return "any";
+        if (typeof value === "string") return "string";
+        if (typeof value === "number") return "number";
+        if (typeof value === "boolean") return "boolean";
+        if (Array.isArray(value)) {
+          if (value.length === 0) return "any[]";
+          const itemType = getTypeScriptType(value[0]);
+          return `${itemType}[]`;
+        }
+        if (typeof value === "object") return "any"; // Could be more specific
+        return "any";
+      };
+
+      let result = "// Generated TypeScript interfaces\n\n";
+
+      // Generate interfaces for each four-letter code
+      Object.keys(parsedData).forEach((fourCC) => {
+        if (fourCC !== "_metadata") {
+          const capitalizedName =
+            fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
+          result += generateInterface(
+            `${capitalizedName}Data`,
+            parsedData[fourCC],
+          );
+        }
+      });
+
+      // Generate main interface
+      result += "interface ResourceForkData {\n";
+      Object.keys(parsedData).forEach((fourCC) => {
+        if (fourCC !== "_metadata") {
+          const capitalizedName =
+            fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
+          result += `  ${fourCC}: ${capitalizedName}Data[];\n`;
+        }
+      });
+      result += "}\n\n";
+
+      result += "export type { ResourceForkData };\n";
+
+      return result;
+    },
+    [],
+  );
 
   // Download TypeScript interfaces
   const downloadTypeScript = useCallback(() => {
@@ -270,21 +286,24 @@ export default function ResourceForkParser() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${parsedResult.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"}-types.ts`;
+      a.download = `${
+        parsedResult.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"
+      }-types.ts`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       success({
         title: "TypeScript Downloaded",
-        description: "TypeScript interface file has been generated and downloaded"
+        description:
+          "TypeScript interface file has been generated and downloaded",
       });
     } catch (err) {
       console.error("Error generating TypeScript:", err);
       error({
-        title: "Generation Failed", 
-        description: "Failed to generate TypeScript interfaces"
+        title: "Generation Failed",
+        description: "Failed to generate TypeScript interfaces",
       });
     }
   }, [parsedResult, generateTypeScriptInterfaces, success, error]);
@@ -509,15 +528,16 @@ export default function ResourceForkParser() {
         arraySize: 100,
         arrayFields: [
           { name: "x", type: "i" as const },
-          { name: "y", type: "i" as const }
+          { name: "y", type: "i" as const },
         ], // Default to x and y with integer types
       });
       setFourLetterCodes(updatedSpecs);
       reParseWithUpdatedSpecs(updatedSpecs);
-      
+
       info({
         title: "Array Field Added",
-        description: "Added an array field. Configure the field names and size."
+        description:
+          "Added an array field. Configure the field names and size.",
       });
     },
     [fourLetterCodes, reParseWithUpdatedSpecs, info],
@@ -750,15 +770,15 @@ export default function ResourceForkParser() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       success({
         title: "JSON Downloaded",
-        description: "Resource fork data has been exported to JSON"
+        description: "Resource fork data has been exported to JSON",
       });
     } catch (err) {
       error({
         title: "Download Failed",
-        description: "Failed to generate JSON file"
+        description: "Failed to generate JSON file",
       });
     }
   }, [parsedResult, success, error]);
@@ -790,15 +810,15 @@ export default function ResourceForkParser() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       success({
         title: "Specifications Saved",
-        description: "Struct specifications have been exported to text file"
+        description: "Struct specifications have been exported to text file",
       });
     } catch (err) {
       error({
         title: "Save Failed",
-        description: "Failed to generate specifications file"
+        description: "Failed to generate specifications file",
       });
     }
   }, [fourLetterCodes, generateStructSpec, success, error, warning]);
@@ -926,11 +946,11 @@ export default function ResourceForkParser() {
   const renderSampleDataUI = (sampleData: any) => {
     if (!sampleData) return <span className="text-gray-400">-</span>;
     console.log("sampledata", sampleData);
-    
+
     const renderJson = (obj: any, title?: string) => (
       <div className="bg-gray-900 p-2 rounded">
         {title && <div className="text-xs text-gray-400 mb-1">{title}:</div>}
-        <pre className="text-sm text-gray-200 overflow-x-auto">
+        <pre className="text-sm text-gray-200 overflow-x-auto max-h-80 min-h-0 overflow-y-auto">
           {JSON.stringify(obj, null, 2)}
         </pre>
       </div>
@@ -951,23 +971,27 @@ export default function ResourceForkParser() {
           {resourceIds.slice(0, 3).map((resourceId) => {
             const resource = sampleData[resourceId];
             if (!resource) return null;
-            
+
             return (
-              <div key={resourceId} className="border border-gray-600 rounded p-2">
+              <div
+                key={resourceId}
+                className="border border-gray-600 rounded p-2"
+              >
                 <div className="text-sm text-gray-300 mb-2">
                   Resource ID: {resourceId}
                   {resource.name && <span> | Name: {resource.name}</span>}
                   {resource.order && <span> | Order: {resource.order}</span>}
                 </div>
-                
+
                 {resource.conversionError && (
                   <div className="text-red-300 mb-2">
-                    <strong>Conversion Error:</strong> {resource.conversionError}
+                    <strong>Conversion Error:</strong>{" "}
+                    {resource.conversionError}
                   </div>
                 )}
-                
+
                 {resource.obj && renderJson(resource.obj, "Parsed Object")}
-                
+
                 {resource.data && !resource.obj && (
                   <div className="text-gray-200">
                     <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
@@ -995,9 +1019,7 @@ export default function ResourceForkParser() {
 
       return (
         <div className="space-y-2">
-          <div className="text-gray-300">
-            Array items: {sampleData.length}
-          </div>
+          <div className="text-gray-300">Array items: {sampleData.length}</div>
           {sampleData.slice(0, 3).map((item: any, idx: number) => (
             <div key={idx} className="border border-gray-600 rounded p-2">
               {item.conversionError && (
@@ -1005,7 +1027,8 @@ export default function ResourceForkParser() {
                   Error: {item.conversionError}
                 </div>
               )}
-              {item.obj && renderJson(item.obj, `Item ${idx + 1} - Parsed Object`)}
+              {item.obj &&
+                renderJson(item.obj, `Item ${idx + 1} - Parsed Object`)}
               {item.data && !item.obj && (
                 <div className="text-gray-200">
                   <div className="text-xs text-gray-400 mb-1">Raw Data:</div>
@@ -1047,8 +1070,9 @@ export default function ResourceForkParser() {
               <span className="font-medium">Work In Progress</span>
             </div>
             <p className="text-yellow-100 text-sm mt-1">
-              This application is under active development. Features may be incomplete, 
-              and parsing results should be verified. Use with caution for production data.
+              This application is under active development. Features may be
+              incomplete, and parsing results should be verified. Use with
+              caution for production data.
             </p>
           </div>
         </div>
@@ -1312,7 +1336,7 @@ export default function ResourceForkParser() {
                   {/* Sample Data Display */}
                   {spec.sampleData && (
                     <div className="bg-gray-900 rounded p-4 space-y-2">
-                      <h4 className="font-medium text-gray-300">
+                      <h4 className="font-medium text-gray-300 max-h-40 min-h-0 overflow-y-auto">
                         Sample Data:
                       </h4>
                       <div>{renderSampleDataUI(spec.sampleData)}</div>
@@ -1369,7 +1393,10 @@ export default function ResourceForkParser() {
                               <TableCell>
                                 {dataType.isArrayField ? (
                                   <div className="flex items-center gap-2">
-                                    <Badge variant="secondary" className="text-xs">
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
                                       Array
                                     </Badge>
                                     <Select
@@ -1429,7 +1456,8 @@ export default function ResourceForkParser() {
                                     value={dataType.arraySize || 100}
                                     onChange={(e) =>
                                       updateDataType(specIndex, dataType.id, {
-                                        arraySize: parseInt(e.target.value) || 1,
+                                        arraySize:
+                                          parseInt(e.target.value) || 1,
                                       })
                                     }
                                     className="w-20 bg-gray-600 border-gray-500 text-white"
@@ -1460,29 +1488,88 @@ export default function ResourceForkParser() {
                               <TableCell>
                                 {dataType.isArrayField ? (
                                   <div className="space-y-3 bg-gray-700 p-3 rounded">
-                                    <div className="text-sm text-gray-300 font-medium">Array Field Configuration:</div>
-                                    {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((arrayField, idx) => (
-                                      <div key={idx} className="flex gap-2 items-center bg-gray-600 p-2 rounded">
+                                    <div className="text-sm text-gray-300 font-medium">
+                                      Array Field Configuration:
+                                    </div>
+                                    {(
+                                      dataType.arrayFields || [
+                                        { name: "x", type: "i" as const },
+                                        { name: "y", type: "i" as const },
+                                      ]
+                                    ).map((arrayField, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="flex gap-2 items-center bg-gray-600 p-2 rounded"
+                                      >
                                         <Input
                                           value={arrayField.name}
                                           onChange={(e) => {
-                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
-                                            newArrayFields[idx] = { ...newArrayFields[idx], name: e.target.value };
-                                            updateDataType(specIndex, dataType.id, {
-                                              arrayFields: newArrayFields,
-                                            });
+                                            const newArrayFields = [
+                                              ...(dataType.arrayFields || [
+                                                {
+                                                  name: "x",
+                                                  type: "i" as const,
+                                                },
+                                                {
+                                                  name: "y",
+                                                  type: "i" as const,
+                                                },
+                                              ]),
+                                            ];
+                                            newArrayFields[idx] = {
+                                              ...newArrayFields[idx],
+                                              name: e.target.value,
+                                            };
+                                            updateDataType(
+                                              specIndex,
+                                              dataType.id,
+                                              {
+                                                arrayFields: newArrayFields,
+                                              },
+                                            );
                                           }}
                                           className="w-24 bg-gray-700 border-gray-500 text-white"
                                           placeholder="Field name"
                                         />
                                         <Select
                                           value={arrayField.type}
-                                          onValueChange={(value: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p") => {
-                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
-                                            newArrayFields[idx] = { ...newArrayFields[idx], type: value };
-                                            updateDataType(specIndex, dataType.id, {
-                                              arrayFields: newArrayFields,
-                                            });
+                                          onValueChange={(
+                                            value:
+                                              | "L"
+                                              | "l"
+                                              | "i"
+                                              | "h"
+                                              | "H"
+                                              | "f"
+                                              | "B"
+                                              | "b"
+                                              | "x"
+                                              | "s"
+                                              | "p",
+                                          ) => {
+                                            const newArrayFields = [
+                                              ...(dataType.arrayFields || [
+                                                {
+                                                  name: "x",
+                                                  type: "i" as const,
+                                                },
+                                                {
+                                                  name: "y",
+                                                  type: "i" as const,
+                                                },
+                                              ]),
+                                            ];
+                                            newArrayFields[idx] = {
+                                              ...newArrayFields[idx],
+                                              type: value,
+                                            };
+                                            updateDataType(
+                                              specIndex,
+                                              dataType.id,
+                                              {
+                                                arrayFields: newArrayFields,
+                                              },
+                                            );
                                           }}
                                         >
                                           <SelectTrigger className="w-40 bg-gray-700 border-gray-500 text-white">
@@ -1502,15 +1589,51 @@ export default function ResourceForkParser() {
                                         </Select>
                                         <Button
                                           onClick={() => {
-                                            const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }])];
+                                            const newArrayFields = [
+                                              ...(dataType.arrayFields || [
+                                                {
+                                                  name: "x",
+                                                  type: "i" as const,
+                                                },
+                                                {
+                                                  name: "y",
+                                                  type: "i" as const,
+                                                },
+                                              ]),
+                                            ];
                                             newArrayFields.splice(idx, 1);
-                                            updateDataType(specIndex, dataType.id, {
-                                              arrayFields: newArrayFields.length > 0 ? newArrayFields : [{ name: "field", type: "i" as const }]
-                                            });
+                                            updateDataType(
+                                              specIndex,
+                                              dataType.id,
+                                              {
+                                                arrayFields:
+                                                  newArrayFields.length > 0
+                                                    ? newArrayFields
+                                                    : [
+                                                        {
+                                                          name: "field",
+                                                          type: "i" as const,
+                                                        },
+                                                      ],
+                                              },
+                                            );
                                           }}
                                           size="sm"
                                           className="bg-red-500 hover:bg-red-600 text-white h-8 w-8 p-0"
-                                          disabled={(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length <= 1}
+                                          disabled={
+                                            (
+                                              dataType.arrayFields || [
+                                                {
+                                                  name: "x",
+                                                  type: "i" as const,
+                                                },
+                                                {
+                                                  name: "y",
+                                                  type: "i" as const,
+                                                },
+                                              ]
+                                            ).length <= 1
+                                          }
                                         >
                                           <X className="h-3 w-3" />
                                         </Button>
@@ -1518,7 +1641,16 @@ export default function ResourceForkParser() {
                                     ))}
                                     <Button
                                       onClick={() => {
-                                        const newArrayFields = [...(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]), { name: "newField", type: "i" as const }];
+                                        const newArrayFields = [
+                                          ...(dataType.arrayFields || [
+                                            { name: "x", type: "i" as const },
+                                            { name: "y", type: "i" as const },
+                                          ]),
+                                          {
+                                            name: "newField",
+                                            type: "i" as const,
+                                          },
+                                        ];
                                         updateDataType(specIndex, dataType.id, {
                                           arrayFields: newArrayFields,
                                         });
@@ -1530,7 +1662,8 @@ export default function ResourceForkParser() {
                                       Add Field
                                     </Button>
                                     <div className="text-xs text-gray-400">
-                                      [{dataType.arraySize || 100}] repetitions each
+                                      [{dataType.arraySize || 100}] repetitions
+                                      each
                                     </div>
                                   </div>
                                 ) : (
@@ -1549,7 +1682,10 @@ export default function ResourceForkParser() {
                               <TableCell>
                                 <Button
                                   onClick={() =>
-                                    removeDataTypeFromSpec(specIndex, dataType.id)
+                                    removeDataTypeFromSpec(
+                                      specIndex,
+                                      dataType.id,
+                                    )
                                   }
                                   size="sm"
                                   className="bg-red-600 hover:bg-red-700 text-white"
@@ -1563,22 +1699,115 @@ export default function ResourceForkParser() {
                               <TableRow className="border-gray-600">
                                 <TableCell colSpan={4}>
                                   <div className="bg-gray-700 p-3 rounded text-sm text-gray-300">
-                                    <div className="font-medium mb-1">Array Field Preview:</div>
+                                    <div className="font-medium mb-1">
+                                      Array Field Preview:
+                                    </div>
                                     <div className="text-gray-400">
                                       This creates indexed fields like:{" "}
                                       <code className="bg-gray-800 px-1 rounded">
-                                        {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((field, idx) => 
-                                          `${field.name}_0${idx < (dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length - 1 ? ", " : ""}`
-                                        ).join("")}, {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map((field, idx) => 
-                                          `${field.name}_1${idx < (dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length - 1 ? ", " : ""}`
-                                        ).join("")}, ...
+                                        {(
+                                          dataType.arrayFields || [
+                                            { name: "x", type: "i" as const },
+                                            { name: "y", type: "i" as const },
+                                          ]
+                                        )
+                                          .map(
+                                            (field, idx) =>
+                                              `${field.name}_0${
+                                                idx <
+                                                (
+                                                  dataType.arrayFields || [
+                                                    {
+                                                      name: "x",
+                                                      type: "i" as const,
+                                                    },
+                                                    {
+                                                      name: "y",
+                                                      type: "i" as const,
+                                                    },
+                                                  ]
+                                                ).length -
+                                                  1
+                                                  ? ", "
+                                                  : ""
+                                              }`,
+                                          )
+                                          .join("")}
+                                        ,{" "}
+                                        {(
+                                          dataType.arrayFields || [
+                                            { name: "x", type: "i" as const },
+                                            { name: "y", type: "i" as const },
+                                          ]
+                                        )
+                                          .map(
+                                            (field, idx) =>
+                                              `${field.name}_1${
+                                                idx <
+                                                (
+                                                  dataType.arrayFields || [
+                                                    {
+                                                      name: "x",
+                                                      type: "i" as const,
+                                                    },
+                                                    {
+                                                      name: "y",
+                                                      type: "i" as const,
+                                                    },
+                                                  ]
+                                                ).length -
+                                                  1
+                                                  ? ", "
+                                                  : ""
+                                              }`,
+                                          )
+                                          .join("")}
+                                        , ...
                                       </code>
                                     </div>
                                     <div className="text-gray-400 mt-1">
-                                      Total: {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length} field{(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length !== 1 ? "s" : ""} × {dataType.arraySize || 100} repetitions = {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).length * (dataType.arraySize || 100)} total fields
+                                      Total:{" "}
+                                      {
+                                        (
+                                          dataType.arrayFields || [
+                                            { name: "x", type: "i" as const },
+                                            { name: "y", type: "i" as const },
+                                          ]
+                                        ).length
+                                      }{" "}
+                                      field
+                                      {(
+                                        dataType.arrayFields || [
+                                          { name: "x", type: "i" as const },
+                                          { name: "y", type: "i" as const },
+                                        ]
+                                      ).length !== 1
+                                        ? "s"
+                                        : ""}{" "}
+                                      × {dataType.arraySize || 100} repetitions
+                                      ={" "}
+                                      {(
+                                        dataType.arrayFields || [
+                                          { name: "x", type: "i" as const },
+                                          { name: "y", type: "i" as const },
+                                        ]
+                                      ).length *
+                                        (dataType.arraySize || 100)}{" "}
+                                      total fields
                                     </div>
                                     <div className="text-gray-400 mt-1">
-                                      Field types: {(dataType.arrayFields || [{ name: "x", type: "i" as const }, { name: "y", type: "i" as const }]).map(field => `${field.name}(${field.type})`).join(", ")}
+                                      Field types:{" "}
+                                      {(
+                                        dataType.arrayFields || [
+                                          { name: "x", type: "i" as const },
+                                          { name: "y", type: "i" as const },
+                                        ]
+                                      )
+                                        .map(
+                                          (field) =>
+                                            `${field.name}(${field.type})`,
+                                        )
+                                        .join(", ")}
                                     </div>
                                   </div>
                                 </TableCell>
