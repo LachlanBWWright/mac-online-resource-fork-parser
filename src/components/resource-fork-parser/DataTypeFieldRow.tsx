@@ -33,7 +33,7 @@ export default function DataTypeFieldRow({
         <TableCell>
           {dataType.isArrayField ? (
             <div className="text-gray-400 italic">
-              Array Field (configured below)
+              Array Field
             </div>
           ) : (
             <Select
@@ -83,7 +83,7 @@ export default function DataTypeFieldRow({
             />
           )}
         </TableCell>
-        <TableCell>
+        <TableCell colSpan={dataType.isArrayField ? 2 : 1}>
           {dataType.isArrayField ? (
             <ArrayFieldConfiguration
               dataType={dataType}
@@ -104,16 +104,30 @@ export default function DataTypeFieldRow({
             />
           )}
         </TableCell>
-        <TableCell>
-          <Button
-            onClick={() => removeDataType(specIndex, dataType.id)}
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white"
-            disabled={isLastField}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </TableCell>
+        {!dataType.isArrayField && (
+          <TableCell>
+            <Button
+              onClick={() => removeDataType(specIndex, dataType.id)}
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isLastField}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        )}
+        {dataType.isArrayField && (
+          <TableCell>
+            <Button
+              onClick={() => removeDataType(specIndex, dataType.id)}
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isLastField}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        )}
       </TableRow>
     </>
   );
