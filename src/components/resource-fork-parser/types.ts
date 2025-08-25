@@ -19,14 +19,16 @@ export interface ParsedResult {
   filename?: string;
 }
 
+export type StructDataType = "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
+
 export interface ArrayFieldSpec {
   name: string;
-  type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
+  type: StructDataType;
 }
 
 export interface DataTypeField {
   id: string;
-  type: "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
+  type: StructDataType;
   count: number;
   description: string;
   isArrayField?: boolean;
@@ -43,8 +45,6 @@ export interface FourLetterCodeSpec {
   statusMessage?: string;
   sampleData?: ParsedResourceCollection | null;
 }
-
-export type StructDataType = "L" | "l" | "i" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
 
 export interface DataTypeOption {
   value: StructDataType;

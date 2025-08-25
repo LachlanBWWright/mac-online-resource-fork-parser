@@ -13,22 +13,6 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
-import { Badge } from "./ui/badge";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -39,8 +23,6 @@ import {
   Download,
   FileText,
   Settings,
-  Plus,
-  Trash2,
   X,
   AlertTriangle,
   Code,
@@ -52,10 +34,10 @@ import type {
   ParsedResult, 
   FourLetterCodeSpec, 
   DataTypeField, 
-  DataTypeOption
+  DataTypeOption,
+  StructDataType
 } from "./resource-fork-parser/types";
-import StatusIcon from "./resource-fork-parser/StatusIcon";
-import SampleDataDisplay from "./resource-fork-parser/SampleDataDisplay";
+import FourLetterCodeSpecification from "./resource-fork-parser/FourLetterCodeSpecification";
 import { generateTypeScriptInterfaces } from "./resource-fork-parser/TypeScriptGenerator";
 
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [
@@ -470,6 +452,37 @@ export default function ResourceForkParser() {
             const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
             while (currentIndex < specStr.length) {
+              // Check for array field pattern like x`y[100]
+              const arrayFieldMatch = specStr
+                .slice(currentIndex)
+                .match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]/);
+                
+              if (arrayFieldMatch) {
+                const fieldNames = arrayFieldMatch[1].split('`');
+                const arraySize = parseInt(arrayFieldMatch[2]);
+                currentIndex += arrayFieldMatch[0].length;
+                
+                // Create array field
+                const arrayFields = fieldNames.map(name => ({
+                  name: name.trim(),
+                  type: "f" as StructDataType, // Default to float for array fields
+                }));
+                
+                dataTypes.push({
+                  id: fieldIndex.toString(),
+                  type: "f" as StructDataType,
+                  count: 1,
+                  description: nameTokens[nameIndex] || `array_${fieldIndex}`,
+                  isArrayField: true,
+                  arraySize: arraySize,
+                  arrayFields: arrayFields,
+                });
+                
+                nameIndex++;
+                fieldIndex++;
+                continue;
+              }
+
               const match = specStr
                 .slice(currentIndex)
                 .match(/^(\d+)([A-Za-z])/);
@@ -490,7 +503,7 @@ export default function ResourceForkParser() {
                   if (type !== "x") nameIndex++;
                   dataTypes.push({
                     id: fieldIndex.toString(),
-                    type: type as any,
+                    type: type as StructDataType,
                     count,
                     description: desc,
                   });
@@ -505,7 +518,7 @@ export default function ResourceForkParser() {
                     nameIndex++;
                     dataTypes.push({
                       id: fieldIndex.toString(),
-                      type: type as any,
+                      type: type as StructDataType,
                       count: 1,
                       description: desc,
                     });
@@ -513,7 +526,7 @@ export default function ResourceForkParser() {
                   }
                 }
               } else {
-                const type: any = specStr[currentIndex];
+                const type = specStr[currentIndex] as StructDataType;
                 currentIndex++;
                 const desc =
                   type === "x"
@@ -524,7 +537,7 @@ export default function ResourceForkParser() {
                 if (type !== "x") nameIndex++;
                 dataTypes.push({
                   id: fieldIndex.toString(),
-                  type: type as any,
+                  type: type,
                   count: 1,
                   description: desc,
                 });
@@ -738,6 +751,37 @@ export default function ResourceForkParser() {
           let nameIndex = 0;
 
           while (currentIndex < specStr.length) {
+            // Check for array field pattern like x`y[100]
+            const arrayFieldMatch = specStr
+              .slice(currentIndex)
+              .match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]/);
+              
+            if (arrayFieldMatch) {
+              const fieldNames = arrayFieldMatch[1].split('`');
+              const arraySize = parseInt(arrayFieldMatch[2]);
+              currentIndex += arrayFieldMatch[0].length;
+              
+              // Create array field
+              const arrayFields = fieldNames.map(name => ({
+                name: name.trim(),
+                type: "f" as StructDataType, // Default to float for array fields
+              }));
+              
+              dataTypes.push({
+                id: fieldIndex.toString(),
+                type: "f" as StructDataType,
+                count: 1,
+                description: nameTokens[nameIndex] || `array_${fieldIndex}`,
+                isArrayField: true,
+                arraySize: arraySize,
+                arrayFields: arrayFields,
+              });
+              
+              nameIndex++;
+              fieldIndex++;
+              continue;
+            }
+
             const match = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
             if (match) {
               const count = parseInt(match[1]);
@@ -754,7 +798,7 @@ export default function ResourceForkParser() {
                 if (type !== "x") nameIndex++;
                 dataTypes.push({
                   id: fieldIndex.toString(),
-                  type: type as any,
+                  type: type as StructDataType,
                   count,
                   description: desc,
                 });
@@ -768,7 +812,7 @@ export default function ResourceForkParser() {
                   nameIndex++;
                   dataTypes.push({
                     id: fieldIndex.toString(),
-                    type: type as any,
+                    type: type as StructDataType,
                     count: 1,
                     description: desc,
                   });
@@ -776,7 +820,7 @@ export default function ResourceForkParser() {
                 }
               }
             } else {
-              const type: any = specStr[currentIndex];
+              const type = specStr[currentIndex] as StructDataType;
               currentIndex++;
               const desc =
                 type === "x"
@@ -787,7 +831,7 @@ export default function ResourceForkParser() {
               if (type !== "x") nameIndex++;
               dataTypes.push({
                 id: fieldIndex.toString(),
-                type: type as any,
+                type: type,
                 count: 1,
                 description: desc,
               });
@@ -1043,508 +1087,17 @@ export default function ResourceForkParser() {
             </CardHeader>
             <CardContent className="space-y-8">
               {fourLetterCodes.map((spec, specIndex) => (
-                <div
+                <FourLetterCodeSpecification
                   key={spec.fourCC}
-                  className="border border-gray-600 rounded-lg p-6 space-y-6 bg-gray-750"
-                >
-                  {/* Four-letter code header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <h3 className="text-xl font-semibold text-white">
-                        {spec.fourCC}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <StatusIcon status={spec.status} />
-                        <Badge
-                          variant={
-                            spec.status === "valid"
-                              ? "default"
-                              : spec.status === "error"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                          className="text-sm"
-                        >
-                          {spec.statusMessage || spec.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <label className="flex items-center gap-2 text-sm text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={spec.isArray}
-                          onChange={(e) =>
-                            updateFourLetterCodeSpec(specIndex, {
-                              isArray: e.target.checked,
-                            })
-                          }
-                          className="rounded bg-gray-700 border-gray-600"
-                        />
-                        Is Array
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={spec.autoPadding}
-                          onChange={(e) =>
-                            updateFourLetterCodeSpec(specIndex, {
-                              autoPadding: e.target.checked,
-                            })
-                          }
-                          className="rounded bg-gray-700 border-gray-600"
-                        />
-                        Auto Padding
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Sample Data Display */}
-                  {spec.sampleData && (
-                    <div className="bg-gray-900 rounded p-4 space-y-2">
-                      <h4 className="font-medium text-gray-300 max-h-40 min-h-0 overflow-y-auto">
-                        Sample Data:
-                      </h4>
-                      <SampleDataDisplay sampleData={spec.sampleData} />
-                    </div>
-                  )}
-
-                  {/* Data types table */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-gray-200">
-                        Data Type Fields
-                      </h4>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => addDataTypeToSpec(specIndex)}
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Field
-                        </Button>
-                        <Button
-                          onClick={() => addArrayFieldToSpec(specIndex)}
-                          size="sm"
-                          className="bg-purple-600 hover:bg-purple-700 text-white"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Array Field
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-gray-600">
-                          <TableHead className="text-gray-300">Type</TableHead>
-                          <TableHead className="text-gray-300">Count</TableHead>
-                          <TableHead className="text-gray-300">
-                            Description
-                          </TableHead>
-                          <TableHead className="text-gray-300">
-                            Actions
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {spec.dataTypes.map((dataType) => (
-                          <React.Fragment key={dataType.id}>
-                            <TableRow
-                              className={`border-gray-600 ${
-                                dataType.isArrayField ? "bg-gray-750" : ""
-                              }`}
-                            >
-                              <TableCell>
-                                {dataType.isArrayField ? (
-                                  <div className="text-gray-400 italic">
-                                    Array Field (see configuration below)
-                                  </div>
-                                ) : (
-                                  <Select
-                                    value={dataType.type}
-                                    onValueChange={(value: any) =>
-                                      updateDataType(specIndex, dataType.id, {
-                                        type: value,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger className="w-64 bg-gray-700 border-gray-600 text-white">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-gray-700 border-gray-600">
-                                      {DATA_TYPE_OPTIONS.map((option) => (
-                                        <SelectItem
-                                          key={option.value}
-                                          value={option.value}
-                                          className="text-white hover:bg-gray-600"
-                                        >
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {dataType.isArrayField ? (
-                                  <div className="text-gray-400">-</div>
-                                ) : (
-                                  <Input
-                                    type="number"
-                                    value={dataType.count}
-                                    onChange={(e) =>
-                                      updateDataType(specIndex, dataType.id, {
-                                        count: parseInt(e.target.value) || 1,
-                                      })
-                                    }
-                                    className="w-20 bg-gray-700 border-gray-600 text-white"
-                                    min="1"
-                                    disabled={
-                                      !(
-                                        dataType.type === "s" ||
-                                        dataType.type === "p" ||
-                                        dataType.type === "x"
-                                      )
-                                    }
-                                  />
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {dataType.isArrayField ? (
-                                  <div className="space-y-3 bg-gray-700 p-3 rounded">
-                                    <div className="text-sm text-gray-300 font-medium">
-                                      Array Field Configuration:
-                                    </div>
-                                    {(
-                                      dataType.arrayFields || [
-                                        { name: "x", type: "i" as const },
-                                        { name: "y", type: "i" as const },
-                                      ]
-                                    ).map((arrayField, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="flex gap-2 items-center bg-gray-600 p-2 rounded"
-                                      >
-                                        <Input
-                                          value={arrayField.name}
-                                          onChange={(e) => {
-                                            const newArrayFields = [
-                                              ...(dataType.arrayFields || [
-                                                {
-                                                  name: "x",
-                                                  type: "i" as const,
-                                                },
-                                                {
-                                                  name: "y",
-                                                  type: "i" as const,
-                                                },
-                                              ]),
-                                            ];
-                                            newArrayFields[idx] = {
-                                              ...newArrayFields[idx],
-                                              name: e.target.value,
-                                            };
-                                            updateDataType(
-                                              specIndex,
-                                              dataType.id,
-                                              {
-                                                arrayFields: newArrayFields,
-                                              },
-                                            );
-                                          }}
-                                          className="w-24 bg-gray-700 border-gray-500 text-white"
-                                          placeholder="Field name"
-                                        />
-                                        <Select
-                                          value={arrayField.type}
-                                          onValueChange={(
-                                            value:
-                                              | "L"
-                                              | "l"
-                                              | "i"
-                                              | "h"
-                                              | "H"
-                                              | "f"
-                                              | "B"
-                                              | "b"
-                                              | "x"
-                                              | "s"
-                                              | "p",
-                                          ) => {
-                                            const newArrayFields = [
-                                              ...(dataType.arrayFields || [
-                                                {
-                                                  name: "x",
-                                                  type: "i" as const,
-                                                },
-                                                {
-                                                  name: "y",
-                                                  type: "i" as const,
-                                                },
-                                              ]),
-                                            ];
-                                            newArrayFields[idx] = {
-                                              ...newArrayFields[idx],
-                                              type: value,
-                                            };
-                                            updateDataType(
-                                              specIndex,
-                                              dataType.id,
-                                              {
-                                                arrayFields: newArrayFields,
-                                              },
-                                            );
-                                          }}
-                                        >
-                                          <SelectTrigger className="w-40 bg-gray-700 border-gray-500 text-white">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-gray-800 border-gray-600">
-                                            {DATA_TYPE_OPTIONS.map((option) => (
-                                              <SelectItem
-                                                key={option.value}
-                                                value={option.value}
-                                                className="text-white hover:bg-gray-700"
-                                              >
-                                                {option.label}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                        <Button
-                                          onClick={() => {
-                                            const newArrayFields = [
-                                              ...(dataType.arrayFields || [
-                                                {
-                                                  name: "x",
-                                                  type: "i" as const,
-                                                },
-                                                {
-                                                  name: "y",
-                                                  type: "i" as const,
-                                                },
-                                              ]),
-                                            ];
-                                            newArrayFields.splice(idx, 1);
-                                            updateDataType(
-                                              specIndex,
-                                              dataType.id,
-                                              {
-                                                arrayFields:
-                                                  newArrayFields.length > 0
-                                                    ? newArrayFields
-                                                    : [
-                                                        {
-                                                          name: "field",
-                                                          type: "i" as const,
-                                                        },
-                                                      ],
-                                              },
-                                            );
-                                          }}
-                                          size="sm"
-                                          className="bg-red-500 hover:bg-red-600 text-white h-8 w-8 p-0"
-                                          disabled={
-                                            (
-                                              dataType.arrayFields || [
-                                                {
-                                                  name: "x",
-                                                  type: "i" as const,
-                                                },
-                                                {
-                                                  name: "y",
-                                                  type: "i" as const,
-                                                },
-                                              ]
-                                            ).length <= 1
-                                          }
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                    <Button
-                                      onClick={() => {
-                                        const newArrayFields = [
-                                          ...(dataType.arrayFields || [
-                                            { name: "x", type: "i" as const },
-                                            { name: "y", type: "i" as const },
-                                          ]),
-                                          {
-                                            name: "newField",
-                                            type: "i" as const,
-                                          },
-                                        ];
-                                        updateDataType(specIndex, dataType.id, {
-                                          arrayFields: newArrayFields,
-                                        });
-                                      }}
-                                      size="sm"
-                                      className="bg-green-500 hover:bg-green-600 text-white text-xs"
-                                    >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      Add Field
-                                    </Button>
-                                    <div className="text-xs text-gray-400">
-                                      [{dataType.arraySize || 100}] repetitions
-                                      each
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <Input
-                                    value={dataType.description}
-                                    onChange={(e) =>
-                                      updateDataType(specIndex, dataType.id, {
-                                        description: e.target.value,
-                                      })
-                                    }
-                                    className="w-48 bg-gray-700 border-gray-600 text-white"
-                                    placeholder="Field description"
-                                  />
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  onClick={() =>
-                                    removeDataTypeFromSpec(
-                                      specIndex,
-                                      dataType.id,
-                                    )
-                                  }
-                                  size="sm"
-                                  className="bg-red-600 hover:bg-red-700 text-white"
-                                  disabled={spec.dataTypes.length === 1}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                            {dataType.isArrayField && (
-                              <TableRow className="border-gray-600">
-                                <TableCell colSpan={4}>
-                                  <div className="bg-gray-700 p-3 rounded text-sm text-gray-300">
-                                    <div className="font-medium mb-1">
-                                      Array Field Preview:
-                                    </div>
-                                    <div className="text-gray-400">
-                                      This creates indexed fields like:{" "}
-                                      <code className="bg-gray-800 px-1 rounded">
-                                        {(
-                                          dataType.arrayFields || [
-                                            { name: "x", type: "i" as const },
-                                            { name: "y", type: "i" as const },
-                                          ]
-                                        )
-                                          .map(
-                                            (field, idx) =>
-                                              `${field.name}_0${
-                                                idx <
-                                                (
-                                                  dataType.arrayFields || [
-                                                    {
-                                                      name: "x",
-                                                      type: "i" as const,
-                                                    },
-                                                    {
-                                                      name: "y",
-                                                      type: "i" as const,
-                                                    },
-                                                  ]
-                                                ).length -
-                                                  1
-                                                  ? ", "
-                                                  : ""
-                                              }`,
-                                          )
-                                          .join("")}
-                                        ,{" "}
-                                        {(
-                                          dataType.arrayFields || [
-                                            { name: "x", type: "i" as const },
-                                            { name: "y", type: "i" as const },
-                                          ]
-                                        )
-                                          .map(
-                                            (field, idx) =>
-                                              `${field.name}_1${
-                                                idx <
-                                                (
-                                                  dataType.arrayFields || [
-                                                    {
-                                                      name: "x",
-                                                      type: "i" as const,
-                                                    },
-                                                    {
-                                                      name: "y",
-                                                      type: "i" as const,
-                                                    },
-                                                  ]
-                                                ).length -
-                                                  1
-                                                  ? ", "
-                                                  : ""
-                                              }`,
-                                          )
-                                          .join("")}
-                                        , ...
-                                      </code>
-                                    </div>
-                                    <div className="text-gray-400 mt-1">
-                                      Total:{" "}
-                                      {
-                                        (
-                                          dataType.arrayFields || [
-                                            { name: "x", type: "i" as const },
-                                            { name: "y", type: "i" as const },
-                                          ]
-                                        ).length
-                                      }{" "}
-                                      field
-                                      {(
-                                        dataType.arrayFields || [
-                                          { name: "x", type: "i" as const },
-                                          { name: "y", type: "i" as const },
-                                        ]
-                                      ).length !== 1
-                                        ? "s"
-                                        : ""}{" "}
-                                      × {dataType.arraySize || 100} repetitions
-                                      ={" "}
-                                      {(
-                                        dataType.arrayFields || [
-                                          { name: "x", type: "i" as const },
-                                          { name: "y", type: "i" as const },
-                                        ]
-                                      ).length *
-                                        (dataType.arraySize || 100)}{" "}
-                                      total fields
-                                    </div>
-                                    <div className="text-gray-400 mt-1">
-                                      Field types:{" "}
-                                      {(
-                                        dataType.arrayFields || [
-                                          { name: "x", type: "i" as const },
-                                          { name: "y", type: "i" as const },
-                                        ]
-                                      )
-                                        .map(
-                                          (field) =>
-                                            `${field.name}(${field.type})`,
-                                        )
-                                        .join(", ")}
-                                    </div>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                  spec={spec}
+                  specIndex={specIndex}
+                  updateFourLetterCodeSpec={updateFourLetterCodeSpec}
+                  addDataTypeToSpec={addDataTypeToSpec}
+                  addArrayFieldToSpec={addArrayFieldToSpec}
+                  removeDataTypeFromSpec={removeDataTypeFromSpec}
+                  updateDataType={updateDataType}
+                  dataTypeOptions={DATA_TYPE_OPTIONS}
+                />
               ))}
             </CardContent>
           </Card>
