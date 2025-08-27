@@ -33,7 +33,10 @@ export default function FourLetterCodeSpecification({
   dataTypeOptions,
 }: FourLetterCodeSpecificationProps) {
   return (
-    <div className="border border-gray-600 rounded-lg p-6 space-y-6 bg-gray-750">
+    <div 
+      className="border border-gray-600 rounded-lg p-6 space-y-6 bg-gray-750"
+      data-testid={`flc-section-${spec.fourCC}`}
+    >
       {/* Four-letter code header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
