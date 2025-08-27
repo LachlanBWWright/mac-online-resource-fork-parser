@@ -1,0 +1,1041 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "Mac Resource Fork Parser" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Upload a resource fork file to analyze and experiment with data types
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - img [ref=e10]
+        - generic [ref=e12]: Work In Progress
+      - paragraph [ref=e13]: This application is under active development. Features may be incomplete, and parsing results should be verified. Use with caution for production data.
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - heading "File Operations & Specifications" [level=3] [ref=e16]:
+        - img [ref=e17]
+        - text: File Operations & Specifications
+      - paragraph [ref=e20]: Upload files to parse, manage specifications, or try the sample file
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]: Upload .rsrc File
+          - button "Choose .rsrc File" [ref=e25]:
+            - img [ref=e26]
+            - text: Choose .rsrc File
+        - generic [ref=e29]:
+          - generic [ref=e30]: Upload .json File
+          - button "Convert from JSON" [ref=e31]:
+            - img [ref=e32]
+            - text: Convert from JSON
+        - generic [ref=e35]:
+          - generic [ref=e36]: Sample File
+          - button "Load EarthFarm Sample" [ref=e37]
+      - generic [ref=e40] [cursor=pointer]:
+        - generic [ref=e41] [cursor=pointer]:
+          - img [ref=e42] [cursor=pointer]
+          - generic [ref=e45] [cursor=pointer]: Specification Management
+        - img [ref=e46] [cursor=pointer]
+      - generic [ref=e48]:
+        - button "Download as JSON" [ref=e49]:
+          - img [ref=e50]
+          - text: Download as JSON
+        - button "Download TypeScript Interfaces" [ref=e53]:
+          - img [ref=e54]
+          - text: Download TypeScript Interfaces
+  - generic [ref=e57]:
+    - generic [ref=e58]:
+      - heading "Four-Letter Code Specifications" [level=3] [ref=e59]
+      - paragraph [ref=e60]: Configure data types for each four-letter code found in your file
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - heading "Hedr" [level=3] [ref=e65]
+            - generic [ref=e66]:
+              - img [ref=e67]
+              - generic [ref=e69]: Successfully parsed data
+          - generic [ref=e70]:
+            - generic [ref=e71]:
+              - checkbox "Is Array" [ref=e72]
+              - text: Is Array
+            - generic [ref=e73]:
+              - checkbox "Auto Padding" [ref=e74]
+              - text: Auto Padding
+        - generic [ref=e75]:
+          - heading "Sample Data:" [level=4] [ref=e76]
+          - generic [ref=e77]:
+            - generic [ref=e79]: "Resources found: 1"
+            - generic [ref=e80]:
+              - generic [ref=e81]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e82]: "| Name: Header"
+              - generic [ref=e83]:
+                - strong [ref=e84]: "Conversion Error:"
+                - text: "Error: The length of Hedr 1000 (96 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e85]:
+                - generic [ref=e86]: "Raw Data:"
+                - code [ref=e87]: 0800000000000253000000B0000000B00000001C000055794120000000000000428800000000001A0000002E000001AC000000070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - heading "Data Type Fields" [level=4] [ref=e90]
+            - generic [ref=e91]:
+              - button "Add Field" [ref=e92]:
+                - img [ref=e93]
+                - text: Add Field
+              - button "Add Array Field" [ref=e94]:
+                - img [ref=e95]
+                - text: Add Array Field
+          - table [ref=e97]:
+            - rowgroup [ref=e98]:
+              - row "Type Count Description Actions" [ref=e99]:
+                - cell "Type" [ref=e100]
+                - cell "Count" [ref=e101]
+                - cell "Description" [ref=e102]
+                - cell "Actions" [ref=e103]
+            - rowgroup [ref=e104]:
+              - row "1 field_1" [ref=e105]:
+                - cell [ref=e106]:
+                  - combobox [ref=e107]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e108]
+                - cell "1" [ref=e110]:
+                  - spinbutton [disabled] [ref=e111]: "1"
+                - cell "field_1" [ref=e112]:
+                  - textbox "Field description" [ref=e113]: field_1
+                - cell [ref=e114]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - heading "alis" [level=3] [ref=e118]
+            - generic [ref=e119]:
+              - img [ref=e120]
+              - generic [ref=e122]: Successfully parsed data
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - checkbox "Is Array" [ref=e125]
+              - text: Is Array
+            - generic [ref=e126]:
+              - checkbox "Auto Padding" [ref=e127]
+              - text: Auto Padding
+        - generic [ref=e128]:
+          - heading "Sample Data:" [level=4] [ref=e129]
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - generic [ref=e132]: "Resources found: 28"
+              - button "Show All (28)" [ref=e133]:
+                - img [ref=e134]
+                - text: Show All (28)
+            - generic [ref=e136]:
+              - generic [ref=e137]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e138]: "| Name: Tile Page Picture Alias"
+              - generic [ref=e139]:
+                - strong [ref=e140]: "Conversion Error:"
+                - text: "Error: The length of alis 1000 (422 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e141]:
+                - generic [ref=e142]: "Raw Data:"
+                - code [ref=e143]: 0000000001A6000200000850726F6A6563747300000000000000000000000000000000000000B4AE2C594244000000019228144C6576656C31205465782030342E7063745F30300000000000000000000000000000000000000000000000000000000000...
+            - generic [ref=e144]:
+              - generic [ref=e145]:
+                - text: "Resource ID: 1001"
+                - generic [ref=e146]: "| Name: Tile Page Picture Alias"
+              - generic [ref=e147]:
+                - strong [ref=e148]: "Conversion Error:"
+                - text: "Error: The length of alis 1001 (422 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e149]:
+                - generic [ref=e150]: "Raw Data:"
+                - code [ref=e151]: 0000000001A6000200000850726F6A6563747300000000000000000000000000000000000000B4AE2C594244000000019228144C6576656C31205465782030342E7063745F30310000000000000000000000000000000000000000000000000000000000...
+            - generic [ref=e152]:
+              - generic [ref=e153]:
+                - text: "Resource ID: 1002"
+                - generic [ref=e154]: "| Name: Tile Page Picture Alias"
+              - generic [ref=e155]:
+                - strong [ref=e156]: "Conversion Error:"
+                - text: "Error: The length of alis 1002 (422 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e157]:
+                - generic [ref=e158]: "Raw Data:"
+                - code [ref=e159]: 0000000001A6000200000850726F6A6563747300000000000000000000000000000000000000B4AE2C594244000000019228144C6576656C31205465782030342E7063745F30320000000000000000000000000000000000000000000000000000000000...
+        - generic [ref=e160]:
+          - generic [ref=e161]:
+            - heading "Data Type Fields" [level=4] [ref=e162]
+            - generic [ref=e163]:
+              - button "Add Field" [ref=e164]:
+                - img [ref=e165]
+                - text: Add Field
+              - button "Add Array Field" [ref=e166]:
+                - img [ref=e167]
+                - text: Add Array Field
+          - table [ref=e169]:
+            - rowgroup [ref=e170]:
+              - row "Type Count Description Actions" [ref=e171]:
+                - cell "Type" [ref=e172]
+                - cell "Count" [ref=e173]
+                - cell "Description" [ref=e174]
+                - cell "Actions" [ref=e175]
+            - rowgroup [ref=e176]:
+              - row "1 field_1" [ref=e177]:
+                - cell [ref=e178]:
+                  - combobox [ref=e179]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e180]
+                - cell "1" [ref=e182]:
+                  - spinbutton [disabled] [ref=e183]: "1"
+                - cell "field_1" [ref=e184]:
+                  - textbox "Field description" [ref=e185]: field_1
+                - cell [ref=e186]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e187]:
+        - generic [ref=e188]:
+          - generic [ref=e189]:
+            - heading "Atrb" [level=3] [ref=e190]
+            - generic [ref=e191]:
+              - img [ref=e192]
+              - generic [ref=e194]: Successfully parsed data
+          - generic [ref=e195]:
+            - generic [ref=e196]:
+              - checkbox "Is Array" [ref=e197]
+              - text: Is Array
+            - generic [ref=e198]:
+              - checkbox "Auto Padding" [ref=e199]
+              - text: Auto Padding
+        - generic [ref=e200]:
+          - heading "Sample Data:" [level=4] [ref=e201]
+          - generic [ref=e202]:
+            - generic [ref=e204]: "Resources found: 1"
+            - generic [ref=e205]:
+              - generic [ref=e206]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e207]: "| Name: Tile Attribute Data"
+              - generic [ref=e208]:
+                - strong [ref=e209]: "Conversion Error:"
+                - text: "Error: The length of Atrb 1000 (259200 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e210]:
+                - generic [ref=e211]: "Raw Data:"
+                - code [ref=e212]: 00010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000...
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - heading "Data Type Fields" [level=4] [ref=e215]
+            - generic [ref=e216]:
+              - button "Add Field" [ref=e217]:
+                - img [ref=e218]
+                - text: Add Field
+              - button "Add Array Field" [ref=e219]:
+                - img [ref=e220]
+                - text: Add Array Field
+          - table [ref=e222]:
+            - rowgroup [ref=e223]:
+              - row "Type Count Description Actions" [ref=e224]:
+                - cell "Type" [ref=e225]
+                - cell "Count" [ref=e226]
+                - cell "Description" [ref=e227]
+                - cell "Actions" [ref=e228]
+            - rowgroup [ref=e229]:
+              - row "1 field_1" [ref=e230]:
+                - cell [ref=e231]:
+                  - combobox [ref=e232]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e233]
+                - cell "1" [ref=e235]:
+                  - spinbutton [disabled] [ref=e236]: "1"
+                - cell "field_1" [ref=e237]:
+                  - textbox "Field description" [ref=e238]: field_1
+                - cell [ref=e239]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e240]:
+        - generic [ref=e241]:
+          - generic [ref=e242]:
+            - heading "Layr" [level=3] [ref=e243]
+            - generic [ref=e244]:
+              - img [ref=e245]
+              - generic [ref=e247]: Successfully parsed data
+          - generic [ref=e248]:
+            - generic [ref=e249]:
+              - checkbox "Is Array" [ref=e250]
+              - text: Is Array
+            - generic [ref=e251]:
+              - checkbox "Auto Padding" [ref=e252]
+              - text: Auto Padding
+        - generic [ref=e253]:
+          - heading "Sample Data:" [level=4] [ref=e254]
+          - generic [ref=e255]:
+            - generic [ref=e257]: "Resources found: 1"
+            - generic [ref=e258]:
+              - generic [ref=e259]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e260]: "| Name: Terrain Layer Matrix"
+              - generic [ref=e261]:
+                - strong [ref=e262]: "Conversion Error:"
+                - text: "Error: The length of Layr 1000 (61952 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e263]:
+                - generic [ref=e264]: "Raw Data:"
+                - code [ref=e265]: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000...
+        - generic [ref=e266]:
+          - generic [ref=e267]:
+            - heading "Data Type Fields" [level=4] [ref=e268]
+            - generic [ref=e269]:
+              - button "Add Field" [ref=e270]:
+                - img [ref=e271]
+                - text: Add Field
+              - button "Add Array Field" [ref=e272]:
+                - img [ref=e273]
+                - text: Add Array Field
+          - table [ref=e275]:
+            - rowgroup [ref=e276]:
+              - row "Type Count Description Actions" [ref=e277]:
+                - cell "Type" [ref=e278]
+                - cell "Count" [ref=e279]
+                - cell "Description" [ref=e280]
+                - cell "Actions" [ref=e281]
+            - rowgroup [ref=e282]:
+              - row "1 field_1" [ref=e283]:
+                - cell [ref=e284]:
+                  - combobox [ref=e285]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e286]
+                - cell "1" [ref=e288]:
+                  - spinbutton [disabled] [ref=e289]: "1"
+                - cell "field_1" [ref=e290]:
+                  - textbox "Field description" [ref=e291]: field_1
+                - cell [ref=e292]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e293]:
+        - generic [ref=e294]:
+          - generic [ref=e295]:
+            - heading "YCrd" [level=3] [ref=e296]
+            - generic [ref=e297]:
+              - img [ref=e298]
+              - generic [ref=e300]: Successfully parsed data
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - checkbox "Is Array" [ref=e303]
+              - text: Is Array
+            - generic [ref=e304]:
+              - checkbox "Auto Padding" [ref=e305]
+              - text: Auto Padding
+        - generic [ref=e306]:
+          - heading "Sample Data:" [level=4] [ref=e307]
+          - generic [ref=e308]:
+            - generic [ref=e310]: "Resources found: 1"
+            - generic [ref=e311]:
+              - generic [ref=e312]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e313]: "| Name: Floor&Ceiling Y Coords"
+              - generic [ref=e314]:
+                - strong [ref=e315]: "Conversion Error:"
+                - text: "Error: The length of YCrd 1000 (125316 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e316]:
+                - generic [ref=e317]: "Raw Data:"
+                - code [ref=e318]: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000...
+        - generic [ref=e319]:
+          - generic [ref=e320]:
+            - heading "Data Type Fields" [level=4] [ref=e321]
+            - generic [ref=e322]:
+              - button "Add Field" [ref=e323]:
+                - img [ref=e324]
+                - text: Add Field
+              - button "Add Array Field" [ref=e325]:
+                - img [ref=e326]
+                - text: Add Array Field
+          - table [ref=e328]:
+            - rowgroup [ref=e329]:
+              - row "Type Count Description Actions" [ref=e330]:
+                - cell "Type" [ref=e331]
+                - cell "Count" [ref=e332]
+                - cell "Description" [ref=e333]
+                - cell "Actions" [ref=e334]
+            - rowgroup [ref=e335]:
+              - row "1 field_1" [ref=e336]:
+                - cell [ref=e337]:
+                  - combobox [ref=e338]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e339]
+                - cell "1" [ref=e341]:
+                  - spinbutton [disabled] [ref=e342]: "1"
+                - cell "field_1" [ref=e343]:
+                  - textbox "Field description" [ref=e344]: field_1
+                - cell [ref=e345]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e346]:
+        - generic [ref=e347]:
+          - generic [ref=e348]:
+            - heading "STgd" [level=3] [ref=e349]
+            - generic [ref=e350]:
+              - img [ref=e351]
+              - generic [ref=e353]: Successfully parsed data
+          - generic [ref=e354]:
+            - generic [ref=e355]:
+              - checkbox "Is Array" [ref=e356]
+              - text: Is Array
+            - generic [ref=e357]:
+              - checkbox "Auto Padding" [ref=e358]
+              - text: Auto Padding
+        - generic [ref=e359]:
+          - heading "Sample Data:" [level=4] [ref=e360]
+          - generic [ref=e361]:
+            - generic [ref=e363]: "Resources found: 1"
+            - generic [ref=e364]:
+              - generic [ref=e365]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e366]: "| Name: SuperTile Grid"
+              - generic [ref=e367]:
+                - strong [ref=e368]: "Conversion Error:"
+                - text: "Error: The length of STgd 1000 (1936 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e369]:
+                - generic [ref=e370]: "Raw Data:"
+                - code [ref=e371]: 000000000000000000000000000000000000000100000002000000030000000400000005000000060000000700000008000000090000000A0000000B0000000C0000000D00000000000000000000000000000000000000000000000E0000000F00000010...
+        - generic [ref=e372]:
+          - generic [ref=e373]:
+            - heading "Data Type Fields" [level=4] [ref=e374]
+            - generic [ref=e375]:
+              - button "Add Field" [ref=e376]:
+                - img [ref=e377]
+                - text: Add Field
+              - button "Add Array Field" [ref=e378]:
+                - img [ref=e379]
+                - text: Add Array Field
+          - table [ref=e381]:
+            - rowgroup [ref=e382]:
+              - row "Type Count Description Actions" [ref=e383]:
+                - cell "Type" [ref=e384]
+                - cell "Count" [ref=e385]
+                - cell "Description" [ref=e386]
+                - cell "Actions" [ref=e387]
+            - rowgroup [ref=e388]:
+              - row "1 field_1" [ref=e389]:
+                - cell [ref=e390]:
+                  - combobox [ref=e391]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e392]
+                - cell "1" [ref=e394]:
+                  - spinbutton [disabled] [ref=e395]: "1"
+                - cell "field_1" [ref=e396]:
+                  - textbox "Field description" [ref=e397]: field_1
+                - cell [ref=e398]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e399]:
+        - generic [ref=e400]:
+          - generic [ref=e401]:
+            - heading "Itms" [level=3] [ref=e402]
+            - generic [ref=e403]:
+              - img [ref=e404]
+              - generic [ref=e406]: Successfully parsed data
+          - generic [ref=e407]:
+            - generic [ref=e408]:
+              - checkbox "Is Array" [ref=e409]
+              - text: Is Array
+            - generic [ref=e410]:
+              - checkbox "Auto Padding" [ref=e411]
+              - text: Auto Padding
+        - generic [ref=e412]:
+          - heading "Sample Data:" [level=4] [ref=e413]
+          - generic [ref=e414]:
+            - generic [ref=e416]: "Resources found: 1"
+            - generic [ref=e417]:
+              - generic [ref=e418]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e419]: "| Name: Terrain Items List"
+              - generic [ref=e420]:
+                - strong [ref=e421]: "Conversion Error:"
+                - text: "Error: The length of Itms 1000 (9520 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e422]:
+                - generic [ref=e423]: "Raw Data:"
+                - code [ref=e424]: 0000002B00000151000E0000000000000000002D0000027F000E00000000000000000030000001E9000E000000000000000000370000031E000E0000000000000000004D000001DC00010000000000000000005A000002CA00010000000000000000006A...
+        - generic [ref=e425]:
+          - generic [ref=e426]:
+            - heading "Data Type Fields" [level=4] [ref=e427]
+            - generic [ref=e428]:
+              - button "Add Field" [ref=e429]:
+                - img [ref=e430]
+                - text: Add Field
+              - button "Add Array Field" [ref=e431]:
+                - img [ref=e432]
+                - text: Add Array Field
+          - table [ref=e434]:
+            - rowgroup [ref=e435]:
+              - row "Type Count Description Actions" [ref=e436]:
+                - cell "Type" [ref=e437]
+                - cell "Count" [ref=e438]
+                - cell "Description" [ref=e439]
+                - cell "Actions" [ref=e440]
+            - rowgroup [ref=e441]:
+              - row "1 field_1" [ref=e442]:
+                - cell [ref=e443]:
+                  - combobox [ref=e444]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e445]
+                - cell "1" [ref=e447]:
+                  - spinbutton [disabled] [ref=e448]: "1"
+                - cell "field_1" [ref=e449]:
+                  - textbox "Field description" [ref=e450]: field_1
+                - cell [ref=e451]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e452]:
+        - generic [ref=e453]:
+          - generic [ref=e454]:
+            - heading "ItCo" [level=3] [ref=e455]
+            - generic [ref=e456]:
+              - img [ref=e457]
+              - generic [ref=e459]: Successfully parsed data
+          - generic [ref=e460]:
+            - generic [ref=e461]:
+              - checkbox "Is Array" [ref=e462]
+              - text: Is Array
+            - generic [ref=e463]:
+              - checkbox "Auto Padding" [ref=e464]
+              - text: Auto Padding
+        - generic [ref=e465]:
+          - heading "Sample Data:" [level=4] [ref=e466]
+          - generic [ref=e467]:
+            - generic [ref=e469]: "Resources found: 1"
+            - generic [ref=e470]:
+              - generic [ref=e471]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e472]: "| Name: Terrain Items Color Array"
+              - generic [ref=e473]:
+                - strong [ref=e474]: "Conversion Error:"
+                - text: "Error: The length of ItCo 1000 (1800 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e475]:
+                - generic [ref=e476]: "Raw Data:"
+                - code [ref=e477]: 00000000000024DE7AE00000000000000000000000000000000000000000CCCC56049367628F8858C51D0003FFFF0001EB84E1EF5BDBFFFFE6630001FFFF3B78052070A5FFFF993F000000000000C28E63DD3489FBB9CCCCFFFF8F5B0E5723DCBE78FFFF...
+        - generic [ref=e478]:
+          - generic [ref=e479]:
+            - heading "Data Type Fields" [level=4] [ref=e480]
+            - generic [ref=e481]:
+              - button "Add Field" [ref=e482]:
+                - img [ref=e483]
+                - text: Add Field
+              - button "Add Array Field" [ref=e484]:
+                - img [ref=e485]
+                - text: Add Array Field
+          - table [ref=e487]:
+            - rowgroup [ref=e488]:
+              - row "Type Count Description Actions" [ref=e489]:
+                - cell "Type" [ref=e490]
+                - cell "Count" [ref=e491]
+                - cell "Description" [ref=e492]
+                - cell "Actions" [ref=e493]
+            - rowgroup [ref=e494]:
+              - row "1 field_1" [ref=e495]:
+                - cell [ref=e496]:
+                  - combobox [ref=e497]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e498]
+                - cell "1" [ref=e500]:
+                  - spinbutton [disabled] [ref=e501]: "1"
+                - cell "field_1" [ref=e502]:
+                  - textbox "Field description" [ref=e503]: field_1
+                - cell [ref=e504]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e505]:
+        - generic [ref=e506]:
+          - generic [ref=e507]:
+            - heading "Spln" [level=3] [ref=e508]
+            - generic [ref=e509]:
+              - img [ref=e510]
+              - generic [ref=e512]: Successfully parsed data
+          - generic [ref=e513]:
+            - generic [ref=e514]:
+              - checkbox "Is Array" [ref=e515]
+              - text: Is Array
+            - generic [ref=e516]:
+              - checkbox "Auto Padding" [ref=e517]
+              - text: Auto Padding
+        - generic [ref=e518]:
+          - heading "Sample Data:" [level=4] [ref=e519]
+          - generic [ref=e520]:
+            - generic [ref=e522]: "Resources found: 1"
+            - generic [ref=e523]:
+              - generic [ref=e524]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e525]: "| Name: Spline List"
+              - generic [ref=e526]:
+                - strong [ref=e527]: "Conversion Error:"
+                - text: "Error: The length of Spln 1000 (832 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e528]:
+                - generic [ref=e529]: "Raw Data:"
+                - code [ref=e530]: 0017000002221F4800000DBA02221EDC0003000004240774084000D809AD01CB0014000002221F4000000DB802221ED8000200000424077005D10100079401C4000C000002221F3C0000076302221ED4000100000424076C01B400AC024D018300100000...
+        - generic [ref=e531]:
+          - generic [ref=e532]:
+            - heading "Data Type Fields" [level=4] [ref=e533]
+            - generic [ref=e534]:
+              - button "Add Field" [ref=e535]:
+                - img [ref=e536]
+                - text: Add Field
+              - button "Add Array Field" [ref=e537]:
+                - img [ref=e538]
+                - text: Add Array Field
+          - table [ref=e540]:
+            - rowgroup [ref=e541]:
+              - row "Type Count Description Actions" [ref=e542]:
+                - cell "Type" [ref=e543]
+                - cell "Count" [ref=e544]
+                - cell "Description" [ref=e545]
+                - cell "Actions" [ref=e546]
+            - rowgroup [ref=e547]:
+              - row "1 field_1" [ref=e548]:
+                - cell [ref=e549]:
+                  - combobox [ref=e550]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e551]
+                - cell "1" [ref=e553]:
+                  - spinbutton [disabled] [ref=e554]: "1"
+                - cell "field_1" [ref=e555]:
+                  - textbox "Field description" [ref=e556]: field_1
+                - cell [ref=e557]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e558]:
+        - generic [ref=e559]:
+          - generic [ref=e560]:
+            - heading "SpNb" [level=3] [ref=e561]
+            - generic [ref=e562]:
+              - img [ref=e563]
+              - generic [ref=e565]: Successfully parsed data
+          - generic [ref=e566]:
+            - generic [ref=e567]:
+              - checkbox "Is Array" [ref=e568]
+              - text: Is Array
+            - generic [ref=e569]:
+              - checkbox "Auto Padding" [ref=e570]
+              - text: Auto Padding
+        - generic [ref=e571]:
+          - heading "Sample Data:" [level=4] [ref=e572]
+          - generic [ref=e573]:
+            - generic [ref=e574]:
+              - generic [ref=e575]: "Resources found: 26"
+              - button "Show All (26)" [ref=e576]:
+                - img [ref=e577]
+                - text: Show All (26)
+            - generic [ref=e579]:
+              - generic [ref=e580]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e581]: "| Name: Spline Nub List"
+              - generic [ref=e582]:
+                - strong [ref=e583]: "Conversion Error:"
+                - text: "Error: The length of SpNb 1000 (184 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e584]:
+                - generic [ref=e585]: "Raw Data:"
+                - code [ref=e586]: 43720000450A3000436C00004507B0004379000045053000439380004504300043AD80004504500043B380004506D00043B300004509C00043B30000450D500043B780004511200043CB00004511B00043E100004512D00043E400004516C00043D20000...
+            - generic [ref=e587]:
+              - generic [ref=e588]:
+                - text: "Resource ID: 1001"
+                - generic [ref=e589]: "| Name: Spline Nub List"
+              - generic [ref=e590]:
+                - strong [ref=e591]: "Conversion Error:"
+                - text: "Error: The length of SpNb 1001 (160 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e592]:
+                - generic [ref=e593]: "Raw Data:"
+                - code [ref=e594]: 43D1000044E5800043CF000044DBE00043D2000044D2C00043CE800044C7800043CD000044BD600043B1000044BA40004390000044BC20004387800044C120004396000044C720004397800044CDE000438E000044D240004380800044D90000438C0000...
+            - generic [ref=e595]:
+              - generic [ref=e596]:
+                - text: "Resource ID: 1002"
+                - generic [ref=e597]: "| Name: Spline Nub List"
+              - generic [ref=e598]:
+                - strong [ref=e599]: "Conversion Error:"
+                - text: "Error: The length of SpNb 1002 (96 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e600]:
+                - generic [ref=e601]: "Raw Data:"
+                - code [ref=e602]: 4366000043DA000043A2800043DD000043B9800043E4800043C180004401C00043B58000440DC000439E8000441040004376000044100000434C00004413400043300000440B80004332000043F580004351000043EB00004366000043DA0000
+        - generic [ref=e603]:
+          - generic [ref=e604]:
+            - heading "Data Type Fields" [level=4] [ref=e605]
+            - generic [ref=e606]:
+              - button "Add Field" [ref=e607]:
+                - img [ref=e608]
+                - text: Add Field
+              - button "Add Array Field" [ref=e609]:
+                - img [ref=e610]
+                - text: Add Array Field
+          - table [ref=e612]:
+            - rowgroup [ref=e613]:
+              - row "Type Count Description Actions" [ref=e614]:
+                - cell "Type" [ref=e615]
+                - cell "Count" [ref=e616]
+                - cell "Description" [ref=e617]
+                - cell "Actions" [ref=e618]
+            - rowgroup [ref=e619]:
+              - row "1 field_1" [ref=e620]:
+                - cell [ref=e621]:
+                  - combobox [ref=e622]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e623]
+                - cell "1" [ref=e625]:
+                  - spinbutton [disabled] [ref=e626]: "1"
+                - cell "field_1" [ref=e627]:
+                  - textbox "Field description" [ref=e628]: field_1
+                - cell [ref=e629]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e630]:
+        - generic [ref=e631]:
+          - generic [ref=e632]:
+            - heading "SpPt" [level=3] [ref=e633]
+            - generic [ref=e634]:
+              - img [ref=e635]
+              - generic [ref=e637]: Successfully parsed data
+          - generic [ref=e638]:
+            - generic [ref=e639]:
+              - checkbox "Is Array" [ref=e640]
+              - text: Is Array
+            - generic [ref=e641]:
+              - checkbox "Auto Padding" [ref=e642]
+              - text: Auto Padding
+        - generic [ref=e643]:
+          - heading "Sample Data:" [level=4] [ref=e644]
+          - generic [ref=e645]:
+            - generic [ref=e646]:
+              - generic [ref=e647]: "Resources found: 26"
+              - button "Show All (26)" [ref=e648]:
+                - img [ref=e649]
+                - text: Show All (26)
+            - generic [ref=e651]:
+              - generic [ref=e652]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e653]: "| Name: Spline Point List"
+              - generic [ref=e654]:
+                - strong [ref=e655]: "Conversion Error:"
+                - text: "Error: The length of SpPt 1000 (28112 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e656]:
+                - generic [ref=e657]: "Raw Data:"
+                - code [ref=e658]: 43720000450A30004371EDAA450A2B1F4371DB54450A263D4371C900450A215C4371B6AD450A1C7A4371A45D450A179843719210450A12B743717FC6450A0DD543716D81450A08F343715B40450A0411437149054509FF2E437136CF4509FA4C437124A0...
+            - generic [ref=e659]:
+              - generic [ref=e660]:
+                - text: "Resource ID: 1001"
+                - generic [ref=e661]: "| Name: Spline Point List"
+              - generic [ref=e662]:
+                - strong [ref=e663]: "Conversion Error:"
+                - text: "Error: The length of SpPt 1001 (28096 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e664]:
+                - generic [ref=e665]: "Raw Data:"
+                - code [ref=e666]: 43D1000044E5800043D0FBAD44E5753643D0F75B44E56A6D43D0F30844E55FA343D0EEB644E554D943D0EA6444E54A1043D0E61244E53F4643D0E1C144E5347D43D0DD7044E529B343D0D92044E51EEA43D0D4D044E5142143D0D08144E5095743D0CC32...
+            - generic [ref=e667]:
+              - generic [ref=e668]:
+                - text: "Resource ID: 1002"
+                - generic [ref=e669]: "| Name: Spline Point List"
+              - generic [ref=e670]:
+                - strong [ref=e671]: "Conversion Error:"
+                - text: "Error: The length of SpPt 1002 (15128 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e672]:
+                - generic [ref=e673]: "Raw Data:"
+                - code [ref=e674]: 4366000043DA000043665DD843DA031B4366BBB143DA06364367198943DA09514367776043DA0C6C4367D53743DA0F874368330C43DA12A1436890E143DA15BC4368EEB443DA18D743694C8643DA1BF24369AA5643DA1F0C436A082443DA2227436A65F0...
+        - generic [ref=e675]:
+          - generic [ref=e676]:
+            - heading "Data Type Fields" [level=4] [ref=e677]
+            - generic [ref=e678]:
+              - button "Add Field" [ref=e679]:
+                - img [ref=e680]
+                - text: Add Field
+              - button "Add Array Field" [ref=e681]:
+                - img [ref=e682]
+                - text: Add Array Field
+          - table [ref=e684]:
+            - rowgroup [ref=e685]:
+              - row "Type Count Description Actions" [ref=e686]:
+                - cell "Type" [ref=e687]
+                - cell "Count" [ref=e688]
+                - cell "Description" [ref=e689]
+                - cell "Actions" [ref=e690]
+            - rowgroup [ref=e691]:
+              - row "1 field_1" [ref=e692]:
+                - cell [ref=e693]:
+                  - combobox [ref=e694]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e695]
+                - cell "1" [ref=e697]:
+                  - spinbutton [disabled] [ref=e698]: "1"
+                - cell "field_1" [ref=e699]:
+                  - textbox "Field description" [ref=e700]: field_1
+                - cell [ref=e701]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e702]:
+        - generic [ref=e703]:
+          - generic [ref=e704]:
+            - heading "SpIt" [level=3] [ref=e705]
+            - generic [ref=e706]:
+              - img [ref=e707]
+              - generic [ref=e709]: Successfully parsed data
+          - generic [ref=e710]:
+            - generic [ref=e711]:
+              - checkbox "Is Array" [ref=e712]
+              - text: Is Array
+            - generic [ref=e713]:
+              - checkbox "Auto Padding" [ref=e714]
+              - text: Auto Padding
+        - generic [ref=e715]:
+          - heading "Sample Data:" [level=4] [ref=e716]
+          - generic [ref=e717]:
+            - generic [ref=e718]:
+              - generic [ref=e719]: "Resources found: 26"
+              - button "Show All (26)" [ref=e720]:
+                - img [ref=e721]
+                - text: Show All (26)
+            - generic [ref=e723]:
+              - generic [ref=e724]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e725]: "| Name: Spline Item List"
+              - generic [ref=e726]:
+                - strong [ref=e727]: "Conversion Error:"
+                - text: "Error: The length of SpIt 1000 (36 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e728]:
+                - generic [ref=e729]: "Raw Data:"
+                - code [ref=e730]: 3DBC6A8000040100000000003EDB22D200040000000000003F54FDF4000400000000F154
+            - generic [ref=e731]:
+              - generic [ref=e732]:
+                - text: "Resource ID: 1001"
+                - generic [ref=e733]: "| Name: Spline Item List"
+              - generic [ref=e734]:
+                - strong [ref=e735]: "Conversion Error:"
+                - text: "Error: The length of SpIt 1001 (24 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e736]:
+                - generic [ref=e737]: "Raw Data:"
+                - code [ref=e738]: 3D872B0200040000000000003F178D500004000000000000
+            - generic [ref=e739]:
+              - generic [ref=e740]:
+                - text: "Resource ID: 1002"
+                - generic [ref=e741]: "| Name: Spline Item List"
+              - generic [ref=e742]:
+                - strong [ref=e743]: "Conversion Error:"
+                - text: "Error: The length of SpIt 1002 (12 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e744]:
+                - generic [ref=e745]: "Raw Data:"
+                - code [ref=e746]: 3D1BA5E40004000000000000
+        - generic [ref=e747]:
+          - generic [ref=e748]:
+            - heading "Data Type Fields" [level=4] [ref=e749]
+            - generic [ref=e750]:
+              - button "Add Field" [ref=e751]:
+                - img [ref=e752]
+                - text: Add Field
+              - button "Add Array Field" [ref=e753]:
+                - img [ref=e754]
+                - text: Add Array Field
+          - table [ref=e756]:
+            - rowgroup [ref=e757]:
+              - row "Type Count Description Actions" [ref=e758]:
+                - cell "Type" [ref=e759]
+                - cell "Count" [ref=e760]
+                - cell "Description" [ref=e761]
+                - cell "Actions" [ref=e762]
+            - rowgroup [ref=e763]:
+              - row "1 field_1" [ref=e764]:
+                - cell [ref=e765]:
+                  - combobox [ref=e766]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e767]
+                - cell "1" [ref=e769]:
+                  - spinbutton [disabled] [ref=e770]: "1"
+                - cell "field_1" [ref=e771]:
+                  - textbox "Field description" [ref=e772]: field_1
+                - cell [ref=e773]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e774]:
+        - generic [ref=e775]:
+          - generic [ref=e776]:
+            - heading "Fenc" [level=3] [ref=e777]
+            - generic [ref=e778]:
+              - img [ref=e779]
+              - generic [ref=e781]: Successfully parsed data
+          - generic [ref=e782]:
+            - generic [ref=e783]:
+              - checkbox "Is Array" [ref=e784]
+              - text: Is Array
+            - generic [ref=e785]:
+              - checkbox "Auto Padding" [ref=e786]
+              - text: Auto Padding
+        - generic [ref=e787]:
+          - heading "Sample Data:" [level=4] [ref=e788]
+          - generic [ref=e789]:
+            - generic [ref=e791]: "Resources found: 1"
+            - generic [ref=e792]:
+              - generic [ref=e793]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e794]: "| Name: Fence List"
+              - generic [ref=e795]:
+                - strong [ref=e796]: "Conversion Error:"
+                - text: "Error: The length of Fenc 1000 (736 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e797]:
+                - generic [ref=e798]: "Raw Data:"
+                - code [ref=e799]: 0000001E0424070C080800B309EF027900020007042407080808019508D8019A000000020424070408070195080701D0000300060424070006030158073601640000000F042406FC05ED008D080701B50000001D042406F8060E01CD0808033700000013...
+        - generic [ref=e800]:
+          - generic [ref=e801]:
+            - heading "Data Type Fields" [level=4] [ref=e802]
+            - generic [ref=e803]:
+              - button "Add Field" [ref=e804]:
+                - img [ref=e805]
+                - text: Add Field
+              - button "Add Array Field" [ref=e806]:
+                - img [ref=e807]
+                - text: Add Array Field
+          - table [ref=e809]:
+            - rowgroup [ref=e810]:
+              - row "Type Count Description Actions" [ref=e811]:
+                - cell "Type" [ref=e812]
+                - cell "Count" [ref=e813]
+                - cell "Description" [ref=e814]
+                - cell "Actions" [ref=e815]
+            - rowgroup [ref=e816]:
+              - row "1 field_1" [ref=e817]:
+                - cell [ref=e818]:
+                  - combobox [ref=e819]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e820]
+                - cell "1" [ref=e822]:
+                  - spinbutton [disabled] [ref=e823]: "1"
+                - cell "field_1" [ref=e824]:
+                  - textbox "Field description" [ref=e825]: field_1
+                - cell [ref=e826]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e827]:
+        - generic [ref=e828]:
+          - generic [ref=e829]:
+            - heading "FnNb" [level=3] [ref=e830]
+            - generic [ref=e831]:
+              - img [ref=e832]
+              - generic [ref=e834]: Successfully parsed data
+          - generic [ref=e835]:
+            - generic [ref=e836]:
+              - checkbox "Is Array" [ref=e837]
+              - text: Is Array
+            - generic [ref=e838]:
+              - checkbox "Auto Padding" [ref=e839]
+              - text: Auto Padding
+        - generic [ref=e840]:
+          - heading "Sample Data:" [level=4] [ref=e841]
+          - generic [ref=e842]:
+            - generic [ref=e843]:
+              - generic [ref=e844]: "Resources found: 46"
+              - button "Show All (46)" [ref=e845]:
+                - img [ref=e846]
+                - text: Show All (46)
+            - generic [ref=e848]:
+              - generic [ref=e849]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e850]: "| Name: Fence Nub List"
+              - generic [ref=e851]:
+                - strong [ref=e852]: "Conversion Error:"
+                - text: "Error: The length of FnNb 1000 (240 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e853]:
+                - generic [ref=e854]: "Raw Data:"
+                - code [ref=e855]: 00000199000008090000014F00000809000001030000080C000000B80000080E000000B600000848000000B900000883000000B3000008CC000000B800000901000000BA0000093A000000BB0000097D000000B7000009BA000000BB000009E8000000FF...
+            - generic [ref=e856]:
+              - generic [ref=e857]:
+                - text: "Resource ID: 1001"
+                - generic [ref=e858]: "| Name: Fence Nub List"
+              - generic [ref=e859]:
+                - strong [ref=e860]: "Conversion Error:"
+                - text: "Error: The length of FnNb 1001 (56 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e861]:
+                - generic [ref=e862]: "Raw Data:"
+                - code [ref=e863]: 00000196000008430000019500000808000001990000086D0000019A0000088A00000199000008A700000199000008C10000019A000008D8
+            - generic [ref=e864]:
+              - generic [ref=e865]:
+                - text: "Resource ID: 1002"
+                - generic [ref=e866]: "| Name: Fence Nub List"
+              - generic [ref=e867]:
+                - strong [ref=e868]: "Conversion Error:"
+                - text: "Error: The length of FnNb 1002 (16 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e869]:
+                - generic [ref=e870]: "Raw Data:"
+                - code [ref=e871]: 0000019500000807000001D000000807
+        - generic [ref=e872]:
+          - generic [ref=e873]:
+            - heading "Data Type Fields" [level=4] [ref=e874]
+            - generic [ref=e875]:
+              - button "Add Field" [ref=e876]:
+                - img [ref=e877]
+                - text: Add Field
+              - button "Add Array Field" [ref=e878]:
+                - img [ref=e879]
+                - text: Add Array Field
+          - table [ref=e881]:
+            - rowgroup [ref=e882]:
+              - row "Type Count Description Actions" [ref=e883]:
+                - cell "Type" [ref=e884]
+                - cell "Count" [ref=e885]
+                - cell "Description" [ref=e886]
+                - cell "Actions" [ref=e887]
+            - rowgroup [ref=e888]:
+              - row "1 field_1" [ref=e889]:
+                - cell [ref=e890]:
+                  - combobox [ref=e891]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e892]
+                - cell "1" [ref=e894]:
+                  - spinbutton [disabled] [ref=e895]: "1"
+                - cell "field_1" [ref=e896]:
+                  - textbox "Field description" [ref=e897]: field_1
+                - cell [ref=e898]:
+                  - button [disabled]:
+                    - img
+      - generic [ref=e899]:
+        - generic [ref=e900]:
+          - generic [ref=e901]:
+            - heading "Liqd" [level=3] [ref=e902]
+            - generic [ref=e903]:
+              - img [ref=e904]
+              - generic [ref=e906]: Successfully parsed data
+          - generic [ref=e907]:
+            - generic [ref=e908]:
+              - checkbox "Is Array" [ref=e909]
+              - text: Is Array
+            - generic [ref=e910]:
+              - checkbox "Auto Padding" [ref=e911]
+              - text: Auto Padding
+        - generic [ref=e912]:
+          - heading "Sample Data:" [level=4] [ref=e913]
+          - generic [ref=e914]:
+            - generic [ref=e916]: "Resources found: 1"
+            - generic [ref=e917]:
+              - generic [ref=e918]:
+                - text: "Resource ID: 1000"
+                - generic [ref=e919]: "| Name: Water List"
+              - generic [ref=e920]:
+                - strong [ref=e921]: "Conversion Error:"
+                - text: "Error: The length of Liqd 1000 (5852 bytes) doesn't match the struct format for this resource type (4 bytes)"
+              - generic [ref=e922]:
+                - generic [ref=e923]: "Raw Data:"
+                - code [ref=e924]: 0000000000000000000000000008000000000000447700004308000044778000433E0000447780004370000044778000438C0000445E80004387000044610000435C00004463800043340000446600004302000000000000000000000000000000000000...
+        - generic [ref=e925]:
+          - generic [ref=e926]:
+            - heading "Data Type Fields" [level=4] [ref=e927]
+            - generic [ref=e928]:
+              - button "Add Field" [ref=e929]:
+                - img [ref=e930]
+                - text: Add Field
+              - button "Add Array Field" [ref=e931]:
+                - img [ref=e932]
+                - text: Add Array Field
+          - table [ref=e934]:
+            - rowgroup [ref=e935]:
+              - row "Type Count Description Actions" [ref=e936]:
+                - cell "Type" [ref=e937]
+                - cell "Count" [ref=e938]
+                - cell "Description" [ref=e939]
+                - cell "Actions" [ref=e940]
+            - rowgroup [ref=e941]:
+              - row "1 field_1" [ref=e942]:
+                - cell [ref=e943]:
+                  - combobox [ref=e944]:
+                    - generic: i - Signed Int (4 bytes)
+                    - img [ref=e945]
+                - cell "1" [ref=e947]:
+                  - spinbutton [disabled] [ref=e948]: "1"
+                - cell "field_1" [ref=e949]:
+                  - textbox "Field description" [ref=e950]: field_1
+                - cell [ref=e951]:
+                  - button [disabled]:
+                    - img
+```
