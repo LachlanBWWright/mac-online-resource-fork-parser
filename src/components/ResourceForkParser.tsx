@@ -3,7 +3,7 @@ import {
   saveToJson,
   saveFromJson,
 } from "../exten/rsrcdump/rsrcdump-ts/src/rsrcdump";
-import { ottoMaticSpecs } from "../exten/rsrcdump/ottoSpecs";
+// import { ottoMaticSpecs } from "../exten/rsrcdump/ottoSpecs";
 import {
   Card,
   CardContent,
@@ -180,12 +180,10 @@ export default function ResourceForkParser() {
       try {
         // Create struct specs array for parsing
         const structSpecs = specs.map((spec: FourLetterCodeSpec) => {
-          // Use raw Otto specification if available, but process it to remove '+' 
-          if ((spec as any).rawOttoSpec) {
-            const rawSpec = (spec as any).rawOttoSpec;
-            // Remove the '+' character which indicates arrays, as the parser doesn't support it
-            const cleanSpec = rawSpec.replace(/\+:/g, ':');
-            return cleanSpec;
+          // Use raw Otto specification if available
+          if (spec.rawOttoSpec) {
+            // Return the raw specification directly, handling numbered prefixes
+            return spec.rawOttoSpec.replace(/^\d+\./, '');
           }
           
           const specStr = generateStructSpec(spec);
@@ -418,7 +416,8 @@ export default function ResourceForkParser() {
     [fourLetterCodes, reParseWithUpdatedSpecs, info],
   );
 
-  // Parse specification string into FourLetterCodeSpec format
+  // Parse specification string into FourLetterCodeSpec format (unused - kept for reference)
+  /*
   const parseSpecificationString = useCallback((line: string): FourLetterCodeSpec => {
     const parts = line.split(":");
     const fourCC = parts[0];
@@ -526,10 +525,15 @@ export default function ResourceForkParser() {
       fourCC,
       dataTypes,
       isArray,
+      autoPadding: false,
+      status: "valid" as const,
+      sampleData: null,
     };
   }, []);
+  */
 
-  // Load Otto specifications for EarthFarm sample
+  // Load Otto specifications for EarthFarm sample (unused - kept for reference)
+  /*
   const loadOttoSpecifications = useCallback((): FourLetterCodeSpec[] => {
     // Use Otto specifications as-is with raw strings, 
     // let the parseWithSpecs function handle the actual parsing
@@ -549,6 +553,7 @@ export default function ResourceForkParser() {
       };
     });
   }, []);
+  */
 
   // Load EarthFarm sample file
   const loadEarthFarmSample = useCallback(async () => {
@@ -556,7 +561,7 @@ export default function ResourceForkParser() {
     setIsProcessing(true);
 
     try {
-      const response = await fetch("/test-files/EarthFarm.ter.rsrc");
+      const response = await fetch("/mac-online-resource-fork-parser/test-files/EarthFarm.ter.rsrc");
       if (!response.ok) {
         throw new Error("Failed to load EarthFarm sample file");
       }
@@ -566,7 +571,7 @@ export default function ResourceForkParser() {
       const file = new File([data], "EarthFarm.ter.rsrc");
 
       // Load otto-specs.txt content and parse it the same way as handleSpecUpload
-      const specResponse = await fetch("/test-files/otto-specs.txt");
+      const specResponse = await fetch("/mac-online-resource-fork-parser/test-files/otto-specs.txt");
       let ottoSpecifications: FourLetterCodeSpec[] = [];
       
       if (specResponse.ok) {

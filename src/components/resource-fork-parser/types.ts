@@ -41,7 +41,7 @@ export interface FourLetterCodeSpec {
   dataTypes: DataTypeField[];
   isArray: boolean;
   autoPadding?: boolean;
-  status?: "valid" | "error" | "warning";
+  status: "valid" | "error" | "warning";
   statusMessage?: string;
   sampleData?: ParsedResourceCollection | null;
   rawOttoSpec?: string; // Raw specification string for Otto specs
