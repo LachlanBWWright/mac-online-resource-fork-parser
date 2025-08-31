@@ -180,9 +180,12 @@ export default function ResourceForkParser() {
       try {
         // Create struct specs array for parsing
         const structSpecs = specs.map((spec: FourLetterCodeSpec) => {
-          // Use raw Otto specification if available, otherwise generate from UI spec
+          // Use raw Otto specification if available, but process it to remove '+' 
           if ((spec as any).rawOttoSpec) {
-            return (spec as any).rawOttoSpec;
+            const rawSpec = (spec as any).rawOttoSpec;
+            // Remove the '+' character which indicates arrays, as the parser doesn't support it
+            const cleanSpec = rawSpec.replace(/\+:/g, ':');
+            return cleanSpec;
           }
           
           const specStr = generateStructSpec(spec);
@@ -528,18 +531,21 @@ export default function ResourceForkParser() {
 
   // Load Otto specifications for EarthFarm sample
   const loadOttoSpecifications = useCallback((): FourLetterCodeSpec[] => {
-    // For Otto specifications, we should use them as-is without parsing
-    // This preserves padding bytes and complex formatting
+    // Use Otto specifications as-is with raw strings, 
+    // let the parseWithSpecs function handle the actual parsing
     return ottoMaticSpecs.map(specString => {
       const parts = specString.split(":");
       const fourCC = parts[0];
       
-      // Create a simple placeholder spec that will be bypassed by direct string usage
+      // Create a minimal spec that will use the raw Otto string during parsing
       return {
         fourCC,
-        dataTypes: [{ id: "1", type: "i" as StructDataType, count: 1, description: "otto_spec" }],
+        dataTypes: [{ id: "1", type: "i" as StructDataType, count: 1, description: "placeholder" }],
         isArray: false,
-        rawOttoSpec: specString, // Store the raw specification for direct use
+        autoPadding: false,
+        status: "valid" as const,
+        sampleData: null,
+        rawOttoSpec: specString, // This will be used by parseWithSpecs
       };
     });
   }, []);
@@ -559,30 +565,148 @@ export default function ResourceForkParser() {
       const data = new Uint8Array(arrayBuffer);
       const file = new File([data], "EarthFarm.ter.rsrc");
 
-      // Load Otto specifications for proper EarthFarm parsing
-      const ottoSpecs = loadOttoSpecifications();
+      // Load otto-specs.txt content and parse it the same way as handleSpecUpload
+      const specResponse = await fetch("/test-files/otto-specs.txt");
+      let ottoSpecifications: FourLetterCodeSpec[] = [];
       
-      // Extract all four-letter codes from the file to see what's available
-      const extractedSpecs = await extractFourLetterCodes(file);
-      const extractedFourCCs = new Set(extractedSpecs.map(spec => spec.fourCC));
-      
-      // Use Otto specs for codes that have them, defaults for others
-      const finalSpecs = extractedSpecs.map(extracted => {
-        const ottoSpec = ottoSpecs.find(otto => otto.fourCC === extracted.fourCC);
-        if (ottoSpec) {
+      if (specResponse.ok) {
+        const text = await specResponse.text();
+        const lines = text.split("\n").filter((line) => line.trim());
+
+        ottoSpecifications = lines.map((line) => {
+          // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
+          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const parts = cleanLine.split(":");
+          const fourCC = parts[0];
+          const structSpec = parts[1] || "";
+          const namesPart = parts.slice(2).join(":") || "";
+          
+          // Use the same parsing logic as handleSpecUpload
+          const nameTokens = namesPart
+            ? namesPart.split(",").map((s) => s.trim())
+            : [];
+
+          const rawSpec = structSpec || "";
+          const isArray = rawSpec.endsWith("+");
+          const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
+
+          // Parse the struct spec back into data types
+          const dataTypes: DataTypeField[] = [];
+          let currentIndex = 0;
+          let fieldIndex = 1;
+          let nameIndex = 0;
+
+          while (currentIndex < specStr.length) {
+            // Check for array field pattern like x`y[100]
+            const arrayFieldMatch = specStr
+              .slice(currentIndex)
+              .match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]/);
+              
+            if (arrayFieldMatch) {
+              const fieldNames = arrayFieldMatch[1].split('`');
+              const arraySize = parseInt(arrayFieldMatch[2]);
+              currentIndex += arrayFieldMatch[0].length;
+              
+              // Create array field
+              const arrayFields = fieldNames.map(name => ({
+                name: name.trim(),
+                type: "f" as StructDataType, // Default to float for array fields
+              }));
+              
+              dataTypes.push({
+                id: fieldIndex.toString(),
+                type: "f" as StructDataType,
+                count: 1,
+                description: nameTokens[nameIndex] || `array_${fieldIndex}`,
+                isArrayField: true,
+                arraySize: arraySize,
+                arrayFields: arrayFields,
+              });
+              
+              nameIndex++;
+              fieldIndex++;
+              continue;
+            }
+
+            const match = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
+            if (match) {
+              const count = parseInt(match[1]);
+              const type = match[2];
+              currentIndex += match[0].length;
+
+              if (type === "s" || type === "p" || type === "x") {
+                const desc =
+                  type === "x"
+                    ? ""
+                    : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                    ? nameTokens[nameIndex]
+                    : `field_${fieldIndex}`;
+                if (type !== "x") nameIndex++;
+                dataTypes.push({
+                  id: fieldIndex.toString(),
+                  type: type as StructDataType,
+                  count,
+                  description: desc,
+                });
+                fieldIndex++;
+              } else {
+                for (let i = 0; i < count; i++) {
+                  const desc =
+                    nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                      ? nameTokens[nameIndex]
+                      : `field_${fieldIndex}`;
+                  nameIndex++;
+                  dataTypes.push({
+                    id: fieldIndex.toString(),
+                    type: type as StructDataType,
+                    count: 1,
+                    description: desc,
+                  });
+                  fieldIndex++;
+                }
+              }
+            } else {
+              const type = specStr[currentIndex] as StructDataType;
+              currentIndex++;
+              const desc =
+                type === "x"
+                  ? ""
+                  : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                  ? nameTokens[nameIndex]
+                  : `field_${fieldIndex}`;
+              if (type !== "x") nameIndex++;
+              dataTypes.push({
+                id: fieldIndex.toString(),
+                type: type,
+                count: 1,
+                description: desc,
+              });
+              fieldIndex++;
+            }
+          }
+
           return {
-            ...ottoSpec,
+            fourCC,
+            dataTypes,
+            isArray,
             autoPadding: false,
             status: "valid" as const,
             sampleData: null,
+            rawOttoSpec: cleanLine, // Store the full raw specification line
           };
-        }
-        return extracted;
-      });
-      
-      setFourLetterCodes(finalSpecs);
+        });
+      }
 
-      // Parse with proper Otto specs to show correct samples
+      // Extract four-letter codes from the file
+      const extractedSpecs = await extractFourLetterCodes(file);
+      
+      // Merge Otto specifications with extracted specifications
+      const finalSpecs = extractedSpecs.map(extracted => {
+        const ottoSpec = ottoSpecifications.find(otto => otto.fourCC === extracted.fourCC);
+        return ottoSpec || extracted; // Use Otto spec if available, otherwise use extracted default
+      });
+
+      // Parse with the final merged specifications
       const { result, updatedSpecs } = await parseWithSpecs(data, finalSpecs);
 
       setFourLetterCodes(updatedSpecs);
@@ -609,7 +733,7 @@ export default function ResourceForkParser() {
     } finally {
       setIsProcessing(false);
     }
-  }, [extractFourLetterCodes, parseWithSpecs, loadOttoSpecifications]);
+  }, [extractFourLetterCodes, parseWithSpecs]);
 
   // Handle JSON upload
   const handleJsonUpload = useCallback(
@@ -743,7 +867,9 @@ export default function ResourceForkParser() {
         const lines = text.split("\n").filter((line) => line.trim());
 
         const loadedSpecs: FourLetterCodeSpec[] = lines.map((line) => {
-          const parts = line.split(":");
+          // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
+          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const parts = cleanLine.split(":");
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
           const namesPart = parts.slice(2).join(":") || "";
@@ -858,6 +984,7 @@ export default function ResourceForkParser() {
             autoPadding: false,
             status: "valid" as const,
             sampleData: null,
+            rawOttoSpec: cleanLine, // Store the full raw specification line
           };
         });
 
