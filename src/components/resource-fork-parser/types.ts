@@ -40,10 +40,11 @@ export interface FourLetterCodeSpec {
   fourCC: string;
   dataTypes: DataTypeField[];
   isArray: boolean;
-  autoPadding: boolean;
-  status: "valid" | "error" | "warning";
+  autoPadding?: boolean;
+  status?: "valid" | "error" | "warning";
   statusMessage?: string;
   sampleData?: ParsedResourceCollection | null;
+  rawOttoSpec?: string; // Raw specification string for Otto specs
 }
 
 export interface DataTypeOption {
