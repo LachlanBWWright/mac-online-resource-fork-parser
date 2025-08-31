@@ -561,7 +561,10 @@ export default function ResourceForkParser() {
     setIsProcessing(true);
 
     try {
-      const response = await fetch("/mac-online-resource-fork-parser/test-files/EarthFarm.ter.rsrc");
+      // Try fetching with the correct base path for the current environment
+      const basePath = import.meta.env.DEV ? '' : '/mac-online-resource-fork-parser';
+      
+      const response = await fetch(`${basePath}/test-files/EarthFarm.ter.rsrc`);
       if (!response.ok) {
         throw new Error("Failed to load EarthFarm sample file");
       }
@@ -571,7 +574,7 @@ export default function ResourceForkParser() {
       const file = new File([data], "EarthFarm.ter.rsrc");
 
       // Load otto-specs.txt content and parse it the same way as handleSpecUpload
-      const specResponse = await fetch("/mac-online-resource-fork-parser/test-files/otto-specs.txt");
+      const specResponse = await fetch(`${basePath}/test-files/otto-specs.txt`);
       let ottoSpecifications: FourLetterCodeSpec[] = [];
       
       if (specResponse.ok) {
