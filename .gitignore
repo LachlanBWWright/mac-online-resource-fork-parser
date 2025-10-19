@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test files and screenshots
+test-earthfarm-issue.ts
+simple-earthfarm-test.ts
+debug-earthfarm-test.ts
+final-earthfarm-test.ts
+validation-test.ts
+screenshots/debug-*.png
+screenshots/test-*.png
+screenshots/final-*.png
+screenshots/validation-*.png
+test-results/

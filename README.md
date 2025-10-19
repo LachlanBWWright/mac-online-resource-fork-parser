@@ -94,7 +94,16 @@ This allows you to define multiple related fields that repeat together as a grou
 
 ### Setup
 ```bash
+# Clone the repository with submodules
+git clone --recurse-submodules https://github.com/LachlanBWWright/mac-online-resource-fork-parser.git
+
+# Or if you've already cloned it, initialize the submodules
+git submodule init && git submodule update
+
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
 ```
 
