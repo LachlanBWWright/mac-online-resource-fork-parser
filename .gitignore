@@ -29,8 +29,13 @@ simple-earthfarm-test.ts
 debug-earthfarm-test.ts
 final-earthfarm-test.ts
 validation-test.ts
+test-undefined-struct.ts
+debug-test-quick.ts
+test-no-specs.ts
+final-undefined-test.ts
 screenshots/debug-*.png
 screenshots/test-*.png
 screenshots/final-*.png
 screenshots/validation-*.png
+screenshots/no-specs-*.png
 test-results/

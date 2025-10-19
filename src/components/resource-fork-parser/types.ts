@@ -45,6 +45,8 @@ export interface FourLetterCodeSpec {
   statusMessage?: string;
   sampleData?: ParsedResourceCollection | null;
   rawOttoSpec?: string; // Raw specification string for Otto specs
+  hasUserDefinedSpec?: boolean; // Whether the user has defined a custom spec
+  rawData?: Uint8Array; // Raw binary data for undefined structs
 }
 
 export interface DataTypeOption {

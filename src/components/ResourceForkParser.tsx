@@ -79,6 +79,16 @@ export default function ResourceForkParser() {
         // Parse with default otto specs enabled to get all available four-letter codes
         const result = saveToJson(data, [], [], [], true);
 
+        // Try to parse the raw resource fork to get raw data for each four-letter code
+        let resourceFork: { resources: Map<string, Map<number, { data: Uint8Array }>> } | null = null;
+        try {
+          const { ResourceForkParser } = await import("../exten/rsrcdump/rsrcdump-ts/src/resfork");
+          resourceFork = ResourceForkParser.fromBytes(data);
+        } catch (rfError) {
+          console.warn("Could not parse resource fork for raw data:", rfError);
+          // Continue without raw data - not critical for functionality
+        }
+
         // Extract unique four-letter codes from the result
         const fourLetterCodesSet = new Set<string>();
 
@@ -95,17 +105,34 @@ export default function ResourceForkParser() {
           });
         }
 
-        // Create default specs for each four-letter code
+        // Create default specs for each four-letter code with raw data if available
         const defaultSpecs: FourLetterCodeSpec[] = Array.from(
           fourLetterCodesSet,
-        ).map((fourCC) => ({
-          fourCC,
-          dataTypes: [{ id: "1", type: "i", count: 1, description: "field_1" }],
-          isArray: false,
-          autoPadding: false,
-          status: "valid" as const,
-          sampleData: null,
-        }));
+        ).map((fourCC) => {
+          // Get the first resource's raw data for this four-letter code
+          let rawData: Uint8Array | undefined;
+          
+          if (resourceFork) {
+            const typeResources = resourceFork.resources.get(fourCC);
+            if (typeResources) {
+              const firstResource = Array.from(typeResources.values())[0];
+              if (firstResource) {
+                rawData = firstResource.data;
+              }
+            }
+          }
+
+          return {
+            fourCC,
+            dataTypes: [{ id: "1", type: "i", count: 1, description: "field_1" }],
+            isArray: false,
+            autoPadding: false,
+            status: "valid" as const,
+            sampleData: null,
+            hasUserDefinedSpec: false,
+            rawData,
+          };
+        });
 
         return defaultSpecs;
       } catch (error) {
@@ -701,6 +728,7 @@ export default function ResourceForkParser() {
             status: "valid" as const,
             sampleData: null,
             rawOttoSpec: cleanLine, // Store the full raw specification line
+            hasUserDefinedSpec: true, // Specs from file are user-defined
           };
         });
       }
@@ -711,7 +739,11 @@ export default function ResourceForkParser() {
       // Merge Otto specifications with extracted specifications
       const finalSpecs = extractedSpecs.map(extracted => {
         const ottoSpec = ottoSpecifications.find(otto => otto.fourCC === extracted.fourCC);
-        return ottoSpec || extracted; // Use Otto spec if available, otherwise use extracted default
+        // If we have an Otto spec, use it but preserve rawData from extracted spec
+        if (ottoSpec) {
+          return { ...ottoSpec, rawData: extracted.rawData };
+        }
+        return extracted; // Use extracted default with rawData
       });
 
       // Parse with the final merged specifications
@@ -985,6 +1017,9 @@ export default function ResourceForkParser() {
             }
           }
 
+          // Find existing spec to preserve rawData
+          const existingSpec = fourLetterCodes.find(s => s.fourCC === fourCC);
+
           return {
             fourCC,
             dataTypes,
@@ -993,6 +1028,8 @@ export default function ResourceForkParser() {
             status: "valid" as const,
             sampleData: null,
             rawOttoSpec: cleanLine, // Store the full raw specification line
+            hasUserDefinedSpec: true, // Specs from file are user-defined
+            rawData: existingSpec?.rawData, // Preserve raw data if available
           };
         });
 
