@@ -685,19 +685,34 @@ export default function ResourceForkParser() {
                 });
                 fieldIndex++;
               } else {
-                for (let i = 0; i < count; i++) {
-                  const desc =
-                    nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                      ? nameTokens[nameIndex]
-                      : `field_${fieldIndex}`;
-                  nameIndex++;
+                // For array specs (ending with +), treat large counts as a single array field
+                // instead of expanding into individual fields
+                if (isArray && count > 10) {
+                  // Don't expand large arrays - just create one field representing the array
                   dataTypes.push({
                     id: fieldIndex.toString(),
                     type: type as StructDataType,
-                    count: 1,
-                    description: desc,
+                    count,
+                    description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
                   });
+                  nameIndex++;
                   fieldIndex++;
+                } else {
+                  // For non-array specs or small counts, create individual fields
+                  for (let i = 0; i < count; i++) {
+                    const desc =
+                      nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                        ? nameTokens[nameIndex]
+                        : `field_${fieldIndex}`;
+                    nameIndex++;
+                    dataTypes.push({
+                      id: fieldIndex.toString(),
+                      type: type as StructDataType,
+                      count: 1,
+                      description: desc,
+                    });
+                    fieldIndex++;
+                  }
                 }
               }
             } else {
@@ -982,19 +997,34 @@ export default function ResourceForkParser() {
                 });
                 fieldIndex++;
               } else {
-                for (let i = 0; i < count; i++) {
-                  const desc =
-                    nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                      ? nameTokens[nameIndex]
-                      : `field_${fieldIndex}`;
-                  nameIndex++;
+                // For array specs (ending with +), treat large counts as a single array field
+                // instead of expanding into individual fields
+                if (isArray && count > 10) {
+                  // Don't expand large arrays - just create one field representing the array
                   dataTypes.push({
                     id: fieldIndex.toString(),
                     type: type as StructDataType,
-                    count: 1,
-                    description: desc,
+                    count,
+                    description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
                   });
+                  nameIndex++;
                   fieldIndex++;
+                } else {
+                  // For non-array specs or small counts, create individual fields
+                  for (let i = 0; i < count; i++) {
+                    const desc =
+                      nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
+                        ? nameTokens[nameIndex]
+                        : `field_${fieldIndex}`;
+                    nameIndex++;
+                    dataTypes.push({
+                      id: fieldIndex.toString(),
+                      type: type as StructDataType,
+                      count: 1,
+                      description: desc,
+                    });
+                    fieldIndex++;
+                  }
                 }
               }
             } else {

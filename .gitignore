@@ -33,9 +33,14 @@ test-undefined-struct.ts
 debug-test-quick.ts
 test-no-specs.ts
 final-undefined-test.ts
+test-alis-itco.ts
+test-earthfarm-sample.ts
+create-proof-screenshots.ts
 screenshots/debug-*.png
 screenshots/test-*.png
 screenshots/final-*.png
 screenshots/validation-*.png
 screenshots/no-specs-*.png
+screenshots/alis-itco-*.png
+screenshots/earthfarm-sample-*.png
 test-results/
