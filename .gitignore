@@ -40,6 +40,9 @@ test-ui-improvements.ts
 debug-blank-selects.ts
 analyze-selects.ts
 find-blank-selects.ts
+test-array-field-fixes.ts
+debug-liqd-parsing.ts
+analyze-spec-parsing.ts
 screenshots/debug-*.png
 screenshots/test-*.png
 screenshots/final-*.png

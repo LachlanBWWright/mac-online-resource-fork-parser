@@ -30,12 +30,8 @@ export default function DataTypeFieldRow({
   return (
     <>
       <TableRow className={`border-gray-600 ${dataType.isArrayField ? "bg-gray-750" : ""}`}>
-        <TableCell>
-          {dataType.isArrayField ? (
-            <div className="text-gray-400 italic">
-              Array Field
-            </div>
-          ) : (
+        {!dataType.isArrayField && (
+          <TableCell>
             <Select
               value={dataType.type}
               onValueChange={(value: DataTypeField["type"]) =>
@@ -57,12 +53,10 @@ export default function DataTypeFieldRow({
                 ))}
               </SelectContent>
             </Select>
-          )}
-        </TableCell>
-        <TableCell>
-          {dataType.isArrayField ? (
-            <div className="text-gray-400">-</div>
-          ) : (
+          </TableCell>
+        )}
+        {!dataType.isArrayField && (
+          <TableCell>
             <Input
               type="number"
               value={dataType.count}
@@ -81,9 +75,9 @@ export default function DataTypeFieldRow({
                 )
               }
             />
-          )}
-        </TableCell>
-        <TableCell colSpan={dataType.isArrayField ? 2 : 1}>
+          </TableCell>
+        )}
+        <TableCell colSpan={dataType.isArrayField ? 4 : 1}>
           {dataType.isArrayField ? (
             <ArrayFieldConfiguration
               dataType={dataType}
@@ -104,30 +98,16 @@ export default function DataTypeFieldRow({
             />
           )}
         </TableCell>
-        {!dataType.isArrayField && (
-          <TableCell>
-            <Button
-              onClick={() => removeDataType(specIndex, dataType.id)}
-              size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={isLastField}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </TableCell>
-        )}
-        {dataType.isArrayField && (
-          <TableCell>
-            <Button
-              onClick={() => removeDataType(specIndex, dataType.id)}
-              size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={isLastField}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </TableCell>
-        )}
+        <TableCell>
+          <Button
+            onClick={() => removeDataType(specIndex, dataType.id)}
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white"
+            disabled={isLastField}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
       </TableRow>
     </>
   );

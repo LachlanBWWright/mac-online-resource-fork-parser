@@ -143,6 +143,133 @@ export default function ResourceForkParser() {
     [],
   );
 
+  // Helper function to parse spec strings with proper handling of spaces, backticks, and special characters
+  const parseSpecString = useCallback((specStr: string, nameTokens: string[], isArray: boolean): DataTypeField[] => {
+    const dataTypes: DataTypeField[] = [];
+    
+    // Tokenize: split by spaces
+    const tokens: string[] = [];
+    let currentToken = "";
+    let i = 0;
+    
+    while (i < specStr.length) {
+      const char = specStr[i];
+      
+      if (char === ' ') {
+        if (currentToken) {
+          tokens.push(currentToken);
+          currentToken = "";
+        }
+        i++;
+      } else {
+        currentToken += char;
+        i++;
+      }
+    }
+    if (currentToken) tokens.push(currentToken);
+    
+    // Process tokens
+    let tokenIndex = 0;
+    let fieldIndex = 1;
+    let nameIndex = 0;
+    
+    while (tokenIndex < tokens.length) {
+      const token = tokens[tokenIndex];
+      
+      // Regular token: 200f, x, 2x, x?, H, etc.
+      const typeMatch = token.match(/^(\d+)?([A-Za-z])(\?)?$/);
+      if (typeMatch) {
+        const count = typeMatch[1] ? parseInt(typeMatch[1]) : 1;
+        const type = typeMatch[2] as StructDataType;
+        const isOptional = typeMatch[3] === '?';
+        
+        // Check if the current name token has a backtick array pattern
+        const currentName = nameTokens[nameIndex];
+        const backtickMatch = currentName?.match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]$/);
+        
+        if (backtickMatch && (isArray && count > 10)) {
+          // This is an array field pattern like x`y[100]
+          const fieldNames = backtickMatch[1].split('`');
+          const arraySize = parseInt(backtickMatch[2]);
+          
+          // The current token (e.g., "200f") defines the types for this array
+          const arrayFields: Array<{ name: string; type: StructDataType }> = fieldNames.map(name => ({
+            name: name.trim(),
+            type,
+          }));
+          
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type,
+            count: 1,
+            description: currentName,
+            isArrayField: true,
+            arraySize,
+            arrayFields,
+          });
+          
+          nameIndex++;
+          fieldIndex++;
+          tokenIndex++;
+          continue;
+        }
+        
+        // Handle padding/string types
+        if (type === "s" || type === "p" || type === "x") {
+          const desc = type === "x" 
+            ? (isOptional ? "padding?" : "")
+            : (nameTokens[nameIndex] || `field_${fieldIndex}`);
+          
+          if (type !== "x" || !isOptional) {
+            dataTypes.push({
+              id: fieldIndex.toString(),
+              type,
+              count,
+              description: desc,
+            });
+            fieldIndex++;
+          }
+          
+          if (type !== "x") nameIndex++;
+        } else {
+          // Regular data type
+          if (isArray && count > 10) {
+            // Large array - create single field
+            dataTypes.push({
+              id: fieldIndex.toString(),
+              type,
+              count,
+              description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
+            });
+            nameIndex++;
+            fieldIndex++;
+          } else {
+            // Small count - create individual fields
+            for (let j = 0; j < count; j++) {
+              dataTypes.push({
+                id: fieldIndex.toString(),
+                type,
+                count: 1,
+                description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+              });
+              nameIndex++;
+              fieldIndex++;
+            }
+          }
+        }
+      }
+      
+      tokenIndex++;
+    }
+    
+    return dataTypes.length > 0 ? dataTypes : [{
+      id: "1",
+      type: "i",
+      count: 1,
+      description: "field_1",
+    }];
+  }, []);
+
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
@@ -625,115 +752,8 @@ export default function ResourceForkParser() {
           const isArray = rawSpec.endsWith("+");
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
-          // Parse the struct spec back into data types
-          const dataTypes: DataTypeField[] = [];
-          let currentIndex = 0;
-          let fieldIndex = 1;
-          let nameIndex = 0;
-
-          while (currentIndex < specStr.length) {
-            // Check for array field pattern like x`y[100]
-            const arrayFieldMatch = specStr
-              .slice(currentIndex)
-              .match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]/);
-              
-            if (arrayFieldMatch) {
-              const fieldNames = arrayFieldMatch[1].split('`');
-              const arraySize = parseInt(arrayFieldMatch[2]);
-              currentIndex += arrayFieldMatch[0].length;
-              
-              // Create array field
-              const arrayFields = fieldNames.map(name => ({
-                name: name.trim(),
-                type: "f" as StructDataType, // Default to float for array fields
-              }));
-              
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type: "f" as StructDataType,
-                count: 1,
-                description: nameTokens[nameIndex] || `array_${fieldIndex}`,
-                isArrayField: true,
-                arraySize: arraySize,
-                arrayFields: arrayFields,
-              });
-              
-              nameIndex++;
-              fieldIndex++;
-              continue;
-            }
-
-            const match = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
-            if (match) {
-              const count = parseInt(match[1]);
-              const type = match[2];
-              currentIndex += match[0].length;
-
-              if (type === "s" || type === "p" || type === "x") {
-                const desc =
-                  type === "x"
-                    ? ""
-                    : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                    ? nameTokens[nameIndex]
-                    : `field_${fieldIndex}`;
-                if (type !== "x") nameIndex++;
-                dataTypes.push({
-                  id: fieldIndex.toString(),
-                  type: type as StructDataType,
-                  count,
-                  description: desc,
-                });
-                fieldIndex++;
-              } else {
-                // For array specs (ending with +), treat large counts as a single array field
-                // instead of expanding into individual fields
-                if (isArray && count > 10) {
-                  // Don't expand large arrays - just create one field representing the array
-                  dataTypes.push({
-                    id: fieldIndex.toString(),
-                    type: type as StructDataType,
-                    count,
-                    description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
-                  });
-                  nameIndex++;
-                  fieldIndex++;
-                } else {
-                  // For non-array specs or small counts, create individual fields
-                  for (let i = 0; i < count; i++) {
-                    const desc =
-                      nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                        ? nameTokens[nameIndex]
-                        : `field_${fieldIndex}`;
-                    nameIndex++;
-                    dataTypes.push({
-                      id: fieldIndex.toString(),
-                      type: type as StructDataType,
-                      count: 1,
-                      description: desc,
-                    });
-                    fieldIndex++;
-                  }
-                }
-              }
-            } else {
-              const type = specStr[currentIndex] as StructDataType;
-              currentIndex++;
-              const desc =
-                type === "x"
-                  ? ""
-                  : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                  ? nameTokens[nameIndex]
-                  : `field_${fieldIndex}`;
-              if (type !== "x") nameIndex++;
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type: type,
-                count: 1,
-                description: desc,
-              });
-              fieldIndex++;
-            }
-          }
+          // Use the helper function to parse the spec string
+          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
 
           return {
             fourCC,
@@ -788,7 +808,7 @@ export default function ResourceForkParser() {
     } finally {
       setIsProcessing(false);
     }
-  }, [extractFourLetterCodes, parseWithSpecs]);
+  }, [extractFourLetterCodes, parseSpecString, parseWithSpecs]);
 
   // Handle JSON upload
   const handleJsonUpload = useCallback(
@@ -937,115 +957,8 @@ export default function ResourceForkParser() {
           const isArray = rawSpec.endsWith("+");
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
-          // Parse the struct spec back into data types
-          const dataTypes: DataTypeField[] = [];
-          let currentIndex = 0;
-          let fieldIndex = 1;
-          let nameIndex = 0;
-
-          while (currentIndex < specStr.length) {
-            // Check for array field pattern like x`y[100]
-            const arrayFieldMatch = specStr
-              .slice(currentIndex)
-              .match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]/);
-              
-            if (arrayFieldMatch) {
-              const fieldNames = arrayFieldMatch[1].split('`');
-              const arraySize = parseInt(arrayFieldMatch[2]);
-              currentIndex += arrayFieldMatch[0].length;
-              
-              // Create array field
-              const arrayFields = fieldNames.map(name => ({
-                name: name.trim(),
-                type: "f" as StructDataType, // Default to float for array fields
-              }));
-              
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type: "f" as StructDataType,
-                count: 1,
-                description: nameTokens[nameIndex] || `array_${fieldIndex}`,
-                isArrayField: true,
-                arraySize: arraySize,
-                arrayFields: arrayFields,
-              });
-              
-              nameIndex++;
-              fieldIndex++;
-              continue;
-            }
-
-            const match = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
-            if (match) {
-              const count = parseInt(match[1]);
-              const type = match[2];
-              currentIndex += match[0].length;
-
-              if (type === "s" || type === "p" || type === "x") {
-                const desc =
-                  type === "x"
-                    ? ""
-                    : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                    ? nameTokens[nameIndex]
-                    : `field_${fieldIndex}`;
-                if (type !== "x") nameIndex++;
-                dataTypes.push({
-                  id: fieldIndex.toString(),
-                  type: type as StructDataType,
-                  count,
-                  description: desc,
-                });
-                fieldIndex++;
-              } else {
-                // For array specs (ending with +), treat large counts as a single array field
-                // instead of expanding into individual fields
-                if (isArray && count > 10) {
-                  // Don't expand large arrays - just create one field representing the array
-                  dataTypes.push({
-                    id: fieldIndex.toString(),
-                    type: type as StructDataType,
-                    count,
-                    description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
-                  });
-                  nameIndex++;
-                  fieldIndex++;
-                } else {
-                  // For non-array specs or small counts, create individual fields
-                  for (let i = 0; i < count; i++) {
-                    const desc =
-                      nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                        ? nameTokens[nameIndex]
-                        : `field_${fieldIndex}`;
-                    nameIndex++;
-                    dataTypes.push({
-                      id: fieldIndex.toString(),
-                      type: type as StructDataType,
-                      count: 1,
-                      description: desc,
-                    });
-                    fieldIndex++;
-                  }
-                }
-              }
-            } else {
-              const type = specStr[currentIndex] as StructDataType;
-              currentIndex++;
-              const desc =
-                type === "x"
-                  ? ""
-                  : nameTokens[nameIndex] && nameTokens[nameIndex].length > 0
-                  ? nameTokens[nameIndex]
-                  : `field_${fieldIndex}`;
-              if (type !== "x") nameIndex++;
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type: type,
-                count: 1,
-                description: desc,
-              });
-              fieldIndex++;
-            }
-          }
+          // Use the helper function to parse the spec string
+          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
 
           // Find existing spec to preserve rawData
           const existingSpec = fourLetterCodes.find(s => s.fourCC === fourCC);
@@ -1069,7 +982,7 @@ export default function ResourceForkParser() {
         setParseError("Failed to load specifications file");
       }
     },
-    [reParseWithUpdatedSpecs],
+    [fourLetterCodes, parseSpecString, reParseWithUpdatedSpecs],
   );
 
   // Function removed - now using StatusIcon component
