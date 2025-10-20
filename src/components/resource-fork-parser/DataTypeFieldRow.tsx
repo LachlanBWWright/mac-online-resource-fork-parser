@@ -43,7 +43,7 @@ export default function DataTypeFieldRow({
               }
             >
               <SelectTrigger className="w-64 bg-gray-700 border-gray-600 text-white">
-                <SelectValue />
+                <SelectValue placeholder="Select type..." />
               </SelectTrigger>
               <SelectContent className="bg-gray-700 border-gray-600">
                 {dataTypeOptions.map((option) => (

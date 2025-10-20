@@ -189,8 +189,47 @@ export default function UndefinedStructEditor({
         </Button>
       </div>
 
-      <div className="text-xs text-gray-400 mb-3">
-        Data Size: {dataSize} bytes
+      {/* Keep data info visible while defining */}
+      <div className="space-y-2 text-xs bg-gray-750 p-3 rounded">
+        <div>
+          <span className="text-gray-400">Total Data Size:</span>{" "}
+          <span className="text-white font-mono">{dataSize} bytes</span>
+        </div>
+
+        {possibleDivisors.length > 0 && (
+          <div>
+            <span className="text-gray-400">Possible Record Sizes:</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {possibleDivisors.map((div) => (
+                <Badge
+                  key={div}
+                  variant="secondary"
+                  className="bg-gray-700 text-gray-200 text-xs"
+                >
+                  {div} bytes ({dataSize / div} records)
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <span className="text-gray-400">Hex Preview:</span>
+          <div className="bg-gray-900 p-2 rounded mt-1 overflow-x-auto">
+            <code className="text-xs text-green-400 font-mono">
+              {hexPreview}
+            </code>
+          </div>
+        </div>
+
+        <div>
+          <span className="text-gray-400">ASCII Preview:</span>
+          <div className="bg-gray-900 p-2 rounded mt-1 overflow-x-auto">
+            <code className="text-xs text-blue-400 font-mono">
+              {asciiPreview}
+            </code>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">

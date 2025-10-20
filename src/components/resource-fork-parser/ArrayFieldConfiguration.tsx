@@ -91,7 +91,7 @@ export default function ArrayFieldConfiguration({
               onValueChange={(value: ArrayFieldSpec["type"]) => handleFieldTypeChange(idx, value)}
             >
               <SelectTrigger className="bg-gray-700 border-gray-500 text-white">
-                <SelectValue />
+                <SelectValue placeholder="Select type..." />
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-600">
                 {dataTypeOptions.map((option) => (

@@ -36,6 +36,10 @@ final-undefined-test.ts
 test-alis-itco.ts
 test-earthfarm-sample.ts
 create-proof-screenshots.ts
+test-ui-improvements.ts
+debug-blank-selects.ts
+analyze-selects.ts
+find-blank-selects.ts
 screenshots/debug-*.png
 screenshots/test-*.png
 screenshots/final-*.png
@@ -43,4 +47,5 @@ screenshots/validation-*.png
 screenshots/no-specs-*.png
 screenshots/alis-itco-*.png
 screenshots/earthfarm-sample-*.png
+screenshots/blank-section-*.png
 test-results/
