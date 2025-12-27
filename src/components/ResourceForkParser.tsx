@@ -335,7 +335,7 @@ export default function ResourceForkParser() {
         description: "Failed to generate TypeScript interfaces",
       });
     }
-  }, [parsedResult, generateTypeScriptInterfaces, success, error]);
+  }, [parsedResult, success, error]);
 
   const parseWithSpecs = useCallback(
     async (data: Uint8Array, specs: FourLetterCodeSpec[]): Promise<Result<{ result: unknown; updatedSpecs: FourLetterCodeSpec[] }, string>> => {
@@ -937,7 +937,7 @@ export default function ResourceForkParser() {
         title: "JSON Downloaded",
         description: "Resource fork data has been exported to JSON",
       });
-    } catch (err) {
+    } catch {
       error({
         title: "Download Failed",
         description: "Failed to generate JSON file",
@@ -977,7 +977,7 @@ export default function ResourceForkParser() {
         title: "Specifications Saved",
         description: "Struct specifications have been exported to text file",
       });
-    } catch (err) {
+    } catch {
       error({
         title: "Save Failed",
         description: "Failed to generate specifications file",
@@ -1032,7 +1032,7 @@ export default function ResourceForkParser() {
 
         setFourLetterCodes(loadedSpecs);
         reParseWithUpdatedSpecs(loadedSpecs);
-      } catch (error) {
+      } catch {
         setParseError("Failed to load specifications file");
       }
     },
