@@ -43,7 +43,7 @@ describe('UndefinedStructEditor Utilities', () => {
     it('should truncate long byte arrays and add ellipsis', () => {
       const bytes = new Uint8Array(100).fill(0xff);
       const result = bytesToHex(bytes, 5);
-      expect(bytesToHex(result)).toBe('ff ff ff ff ff ...');
+      expect(result).toBe('ff ff ff ff ff ...');
     });
 
     it('should handle empty byte array', () => {

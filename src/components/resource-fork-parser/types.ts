@@ -14,7 +14,7 @@ export interface ParsedResourceCollection {
 
 export interface ParsedResult {
   success: boolean;
-  data?: ParsedResourceCollection | Record<string, ParsedResourceCollection>;
+  data?: unknown; // Changed from specific types to unknown for flexibility
   error?: string;
   filename?: string;
 }
@@ -43,7 +43,7 @@ export interface FourLetterCodeSpec {
   autoPadding?: boolean;
   status: "valid" | "error" | "warning";
   statusMessage?: string;
-  sampleData?: ParsedResourceCollection | null;
+  sampleData?: unknown | null; // Changed from ParsedResourceCollection to unknown for flexibility
   rawOttoSpec?: string; // Raw specification string for Otto specs
   hasUserDefinedSpec?: boolean; // Whether the user has defined a custom spec
   rawData?: Uint8Array; // Raw binary data for undefined structs

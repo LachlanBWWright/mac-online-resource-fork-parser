@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { ParsedResourceCollection, ParsedResource } from "./types";
+import type { ParsedResource } from "./types";
 
 interface SampleDataDisplayProps {
-  sampleData: ParsedResourceCollection | ParsedResource[] | null;
+  sampleData: unknown | null; // Changed to accept unknown
 }
 
 interface JsonDisplayProps {
@@ -104,7 +104,7 @@ export default function SampleDataDisplay({ sampleData }: SampleDataDisplayProps
         </div>
         
         {displayedResources.map((resourceId) => {
-          const resource = sampleData[resourceId];
+          const resource = (sampleData as Record<string, ParsedResource>)[resourceId];
           if (!resource) return null;
 
           return (

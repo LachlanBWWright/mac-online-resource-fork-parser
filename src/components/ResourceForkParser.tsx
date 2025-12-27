@@ -1,9 +1,12 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
   saveToJson,
-  saveFromJson,
-} from "../exten/rsrcdump/rsrcdump-ts/src/rsrcdump";
-// import { ottoMaticSpecs } from "../exten/rsrcdump/ottoSpecs";
+  loadBytesFromJsonAsync,
+  resourceForkFromBytes,
+  type ResourceFork,
+  type Result as RsrcResult,
+} from "@lachlanbwwright/rsrcdump-ts";
+import { type Result, isOk, isErr } from "../lib/result";
 import {
   Card,
   CardContent,
@@ -71,74 +74,79 @@ export default function ResourceForkParser() {
 
   // Extract four-letter codes from uploaded file and set default specs
   const extractFourLetterCodes = useCallback(
-    async (file: File): Promise<FourLetterCodeSpec[]> => {
+    async (file: File): Promise<Result<FourLetterCodeSpec[], string>> => {
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+
+      // Parse with default specs to get all available four-letter codes
+      const jsonResult = await saveToJson(data, []);
+      if (isErr(jsonResult as RsrcResult<string, string>)) {
+        return { ok: false, error: `Failed to parse resource fork: ${(jsonResult as { error: string }).error}` };
+      }
+
+      // Parse JSON string to get the data
+      let parsedData: Record<string, unknown>;
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const data = new Uint8Array(arrayBuffer);
+        parsedData = JSON.parse((jsonResult as { value: string }).value);
+      } catch {
+        return { ok: false, error: "Failed to parse JSON result" };
+      }
 
-        // Parse with default otto specs enabled to get all available four-letter codes
-        const result = saveToJson(data, [], [], [], true);
+      // Try to parse the raw resource fork to get raw data for each four-letter code
+      const resourceForkResult = resourceForkFromBytes(data);
+      const resourceFork: ResourceFork | null = isOk(resourceForkResult as RsrcResult<ResourceFork, string>) ? (resourceForkResult as { value: ResourceFork }).value : null;
+      
+      if (isErr(resourceForkResult as RsrcResult<ResourceFork, string>)) {
+        console.warn("Could not parse resource fork for raw data:", (resourceForkResult as { error: string }).error);
+        // Continue without raw data - not critical for functionality
+      }
 
-        // Try to parse the raw resource fork to get raw data for each four-letter code
-        let resourceFork: { resources: Map<string, Map<number, { data: Uint8Array }>> } | null = null;
-        try {
-          const { ResourceForkParser } = await import("../exten/rsrcdump/rsrcdump-ts/src/resfork");
-          resourceFork = ResourceForkParser.fromBytes(data);
-        } catch (rfError) {
-          console.warn("Could not parse resource fork for raw data:", rfError);
-          // Continue without raw data - not critical for functionality
-        }
+      // Extract unique four-letter codes from the result
+      const fourLetterCodesSet = new Set<string>();
 
-        // Extract unique four-letter codes from the result
-        const fourLetterCodesSet = new Set<string>();
+      if (parsedData && typeof parsedData === "object") {
+        Object.keys(parsedData).forEach((key) => {
+          // Check for four-letter codes (excluding metadata)
+          if (
+            key.length === 4 &&
+            /^[A-Za-z0-9]{4}$/.test(key) &&
+            key !== "_metadata"
+          ) {
+            fourLetterCodesSet.add(key);
+          }
+        });
+      }
 
-        if (result && typeof result === "object") {
-          Object.keys(result).forEach((key) => {
-            // Check for four-letter codes (excluding metadata)
-            if (
-              key.length === 4 &&
-              /^[A-Za-z0-9]{4}$/.test(key) &&
-              key !== "_metadata"
-            ) {
-              fourLetterCodesSet.add(key);
-            }
-          });
-        }
-
-        // Create default specs for each four-letter code with raw data if available
-        const defaultSpecs: FourLetterCodeSpec[] = Array.from(
-          fourLetterCodesSet,
-        ).map((fourCC) => {
-          // Get the first resource's raw data for this four-letter code
-          let rawData: Uint8Array | undefined;
-          
-          if (resourceFork) {
-            const typeResources = resourceFork.resources.get(fourCC);
-            if (typeResources) {
-              const firstResource = Array.from(typeResources.values())[0];
-              if (firstResource) {
-                rawData = firstResource.data;
-              }
+      // Create default specs for each four-letter code with raw data if available
+      const defaultSpecs: FourLetterCodeSpec[] = Array.from(
+        fourLetterCodesSet,
+      ).map((fourCC) => {
+        // Get the first resource's raw data for this four-letter code
+        let rawData: Uint8Array | undefined;
+        
+        if (resourceFork && resourceFork.tree) {
+          const typeResources = resourceFork.tree.get(fourCC);
+          if (typeResources) {
+            const firstResource = Array.from(typeResources.values())[0];
+            if (firstResource) {
+              rawData = firstResource.data;
             }
           }
+        }
 
-          return {
-            fourCC,
-            dataTypes: [{ id: "1", type: "i", count: 1, description: "field_1" }],
-            isArray: false,
-            autoPadding: false,
-            status: "valid" as const,
-            sampleData: null,
-            hasUserDefinedSpec: false,
-            rawData,
-          };
-        });
+        return {
+          fourCC,
+          dataTypes: [{ id: "1", type: "i", count: 1, description: "field_1" }],
+          isArray: false,
+          autoPadding: false,
+          status: "valid" as const,
+          sampleData: null,
+          hasUserDefinedSpec: false,
+          rawData,
+        };
+      });
 
-        return defaultSpecs;
-      } catch (error) {
-        console.error("Error extracting four-letter codes:", error);
-        return [];
-      }
+      return { ok: true, value: defaultSpecs };
     },
     [],
   );
@@ -330,62 +338,69 @@ export default function ResourceForkParser() {
   }, [parsedResult, generateTypeScriptInterfaces, success, error]);
 
   const parseWithSpecs = useCallback(
-    async (data: Uint8Array, specs: FourLetterCodeSpec[]) => {
-      try {
-        // Create struct specs array for parsing
-        const structSpecs = specs.map((spec: FourLetterCodeSpec) => {
-          // Use raw Otto specification if available
-          if (spec.rawOttoSpec) {
-            // Return the raw specification directly, handling numbered prefixes
-            return spec.rawOttoSpec.replace(/^\d+\./, '');
-          }
-          
-          const specStr = generateStructSpec(spec);
-          const description = spec.dataTypes
-            .map((dt) => dt.description)
-            .join(",");
-          return `${spec.fourCC}:${specStr}:${description}`;
-        });
+    async (data: Uint8Array, specs: FourLetterCodeSpec[]): Promise<Result<{ result: unknown; updatedSpecs: FourLetterCodeSpec[] }, string>> => {
+      // Create struct specs array for parsing
+      const structSpecs = specs.map((spec: FourLetterCodeSpec) => {
+        // Use raw Otto specification if available
+        if (spec.rawOttoSpec) {
+          // Return the raw specification directly, handling numbered prefixes
+          return spec.rawOttoSpec.replace(/^\d+\./, '');
+        }
+        
+        const specStr = generateStructSpec(spec);
+        const description = spec.dataTypes
+          .map((dt) => dt.description)
+          .join(",");
+        return `${spec.fourCC}:${specStr}:${description}`;
+      });
 
-        const result = saveToJson(data, structSpecs, [], [], false);
-
-        // Update specs with sample data and validation status
-        const updatedSpecs = specs.map((spec) => {
-          const sampleData =
-            result && result[spec.fourCC] ? result[spec.fourCC] : null;
-
-          let status: "valid" | "error" | "warning" = "error";
-          let statusMessage = "Failed to parse data";
-
-          if (sampleData) {
-            if (Array.isArray(sampleData) && sampleData.length > 0) {
-              status = "valid";
-              statusMessage = `Successfully parsed ${sampleData.length} items`;
-            } else if (
-              typeof sampleData === "object" &&
-              Object.keys(sampleData).length > 0
-            ) {
-              status = "valid";
-              statusMessage = "Successfully parsed data";
-            } else {
-              status = "warning";
-              statusMessage = "Parsed but no meaningful data found";
-            }
-          }
-
-          return {
-            ...spec,
-            sampleData,
-            status,
-            statusMessage,
-          };
-        });
-
-        return { result, updatedSpecs };
-      } catch (error) {
-        console.error("Error parsing with specs:", error);
-        throw error;
+      const jsonResult = await saveToJson(data, structSpecs);
+      
+      if (isErr(jsonResult as RsrcResult<string, string>)) {
+        return { ok: false, error: `Failed to parse resource fork: ${(jsonResult as { error: string }).error}` };
       }
+
+      // Parse JSON string
+      let parsedResult: unknown;
+      try {
+        parsedResult = JSON.parse((jsonResult as { value: string }).value);
+      } catch {
+        return { ok: false, error: "Failed to parse JSON result" };
+      }
+
+      // Update specs with sample data and validation status
+      const updatedSpecs = specs.map((spec) => {
+        const sampleData =
+          parsedResult && typeof parsedResult === "object" && (parsedResult as Record<string, unknown>)[spec.fourCC] ? (parsedResult as Record<string, unknown>)[spec.fourCC] : null;
+
+        let status: "valid" | "error" | "warning" = "error";
+        let statusMessage = "Failed to parse data";
+
+        if (sampleData) {
+          if (Array.isArray(sampleData) && sampleData.length > 0) {
+            status = "valid";
+            statusMessage = `Successfully parsed ${sampleData.length} items`;
+          } else if (
+            typeof sampleData === "object" &&
+            Object.keys(sampleData as Record<string, unknown>).length > 0
+          ) {
+            status = "valid";
+            statusMessage = "Successfully parsed data";
+          } else {
+            status = "warning";
+            statusMessage = "Parsed but no meaningful data found";
+          }
+        }
+
+        return {
+          ...spec,
+          sampleData,
+          status,
+          statusMessage,
+        };
+      });
+
+      return { ok: true, value: { result: parsedResult, updatedSpecs } };
     },
     [generateStructSpec],
   );
@@ -399,41 +414,51 @@ export default function ResourceForkParser() {
       setParseError("");
       setIsProcessing(true);
 
-      try {
-        // Extract four-letter codes automatically
-        const extractedSpecs = await extractFourLetterCodes(file);
-        setFourLetterCodes(extractedSpecs);
-
-        // Parse with default specs to show initial samples
-        const arrayBuffer = await file.arrayBuffer();
-        const data = new Uint8Array(arrayBuffer);
-        const { result, updatedSpecs } = await parseWithSpecs(
-          data,
-          extractedSpecs,
-        );
-
-        setFourLetterCodes(updatedSpecs);
-        setCurrentFile(file);
-
-        if (result) {
-          setParsedResult({
-            success: true,
-            data: result,
-            filename: file.name,
-          });
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to parse file";
-        setParseError(errorMessage);
+      // Extract four-letter codes automatically
+      const extractedResult = await extractFourLetterCodes(file);
+      if (isErr(extractedResult)) {
+        setParseError(extractedResult.error);
         setParsedResult({
           success: false,
-          error: errorMessage,
+          error: extractedResult.error,
           filename: file.name,
         });
-      } finally {
         setIsProcessing(false);
+        return;
       }
+
+      const extractedSpecs = extractedResult.value;
+      setFourLetterCodes(extractedSpecs);
+
+      // Parse with default specs to show initial samples
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const parseResult = await parseWithSpecs(data, extractedSpecs);
+
+      if (isErr(parseResult)) {
+        setParseError(parseResult.error);
+        setParsedResult({
+          success: false,
+          error: parseResult.error,
+          filename: file.name,
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const { result, updatedSpecs } = parseResult.value;
+      setFourLetterCodes(updatedSpecs);
+      setCurrentFile(file);
+
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: file.name,
+        });
+      }
+      
+      setIsProcessing(false);
     },
     [extractFourLetterCodes, parseWithSpecs],
   );
@@ -443,25 +468,24 @@ export default function ResourceForkParser() {
     async (updatedSpecs: FourLetterCodeSpec[]) => {
       if (!currentFile) return;
 
-      try {
-        const arrayBuffer = await currentFile.arrayBuffer();
-        const data = new Uint8Array(arrayBuffer);
-        const { result, updatedSpecs: newSpecs } = await parseWithSpecs(
-          data,
-          updatedSpecs,
-        );
+      const arrayBuffer = await currentFile.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const parseResult = await parseWithSpecs(data, updatedSpecs);
 
-        setFourLetterCodes(newSpecs);
+      if (isErr(parseResult)) {
+        console.error("Error re-parsing:", parseResult.error);
+        return;
+      }
 
-        if (result) {
-          setParsedResult({
-            success: true,
-            data: result,
-            filename: currentFile.name,
-          });
-        }
-      } catch (error) {
-        console.error("Error re-parsing:", error);
+      const { result, updatedSpecs: newSpecs } = parseResult.value;
+      setFourLetterCodes(newSpecs);
+
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: currentFile.name,
+        });
       }
     },
     [currentFile, parseWithSpecs],
@@ -769,7 +793,20 @@ export default function ResourceForkParser() {
       }
 
       // Extract four-letter codes from the file
-      const extractedSpecs = await extractFourLetterCodes(file);
+      const extractedResult = await extractFourLetterCodes(file);
+      
+      if (isErr(extractedResult)) {
+        setParseError(extractedResult.error);
+        setParsedResult({
+          success: false,
+          error: extractedResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const extractedSpecs = extractedResult.value;
       
       // Merge Otto specifications with extracted specifications
       const finalSpecs = extractedSpecs.map(extracted => {
@@ -782,8 +819,20 @@ export default function ResourceForkParser() {
       });
 
       // Parse with the final merged specifications
-      const { result, updatedSpecs } = await parseWithSpecs(data, finalSpecs);
+      const parseResult = await parseWithSpecs(data, finalSpecs);
 
+      if (isErr(parseResult)) {
+        setParseError(parseResult.error);
+        setParsedResult({
+          success: false,
+          error: parseResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const { result, updatedSpecs } = parseResult.value;
       setFourLetterCodes(updatedSpecs);
       setCurrentFile(file);
 
@@ -832,12 +881,17 @@ export default function ResourceForkParser() {
           return `${spec.fourCC}:${specStr}:${description}`;
         });
 
-        const rsrcData = saveFromJson(jsonData, structSpecs);
+        const rsrcResult = await loadBytesFromJsonAsync(jsonData, structSpecs);
+        
+        if (isErr(rsrcResult as RsrcResult<Uint8Array, string>)) {
+          setParseError((rsrcResult as { error: string }).error);
+          setIsProcessing(false);
+          return;
+        }
 
         // Download as .rsrc file
-        // Ensure we pass an ArrayBuffer to Blob by wrapping the data in a Uint8Array
-        const arrayBuffer = new Uint8Array(rsrcData as any).buffer;
-        const blob = new Blob([arrayBuffer], {
+        const rsrcData = (rsrcResult as { value: Uint8Array }).value;
+        const blob = new Blob([rsrcData], {
           type: "application/octet-stream",
         });
         const url = URL.createObjectURL(blob);

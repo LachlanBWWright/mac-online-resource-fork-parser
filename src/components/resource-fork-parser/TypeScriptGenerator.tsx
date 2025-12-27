@@ -1,6 +1,6 @@
 import type { ParsedResourceCollection, ParsedResource } from "./types";
 
-export function generateTypeScriptInterfaces(parsedData: Record<string, unknown>): string {
+export function generateTypeScriptInterfaces(parsedData: unknown): string {
   if (!parsedData || typeof parsedData !== "object") {
     return "// No data available for TypeScript generation";
   }
@@ -132,20 +132,20 @@ export function generateTypeScriptInterfaces(parsedData: Record<string, unknown>
   result += "}\n\n";
 
   // Generate interfaces for each four-letter code
-  Object.keys(parsedData).forEach((fourCC) => {
+  Object.keys(parsedData as Record<string, unknown>).forEach((fourCC) => {
     if (fourCC !== "_metadata") {
       const capitalizedName =
         fourCC.charAt(0).toUpperCase() + fourCC.slice(1).toLowerCase();
       result += generateInterface(
         `${capitalizedName}ParsedData`,
-        parsedData[fourCC],
+        (parsedData as Record<string, unknown>)[fourCC],
       );
     }
   });
 
   // Generate main interface
   result += "interface ResourceForkData {\n";
-  Object.keys(parsedData).forEach((fourCC) => {
+  Object.keys(parsedData as Record<string, unknown>).forEach((fourCC) => {
     if (fourCC !== "_metadata") {
       result += `  ${fourCC}: Record<string, ResourceData>;\n`;
     }
