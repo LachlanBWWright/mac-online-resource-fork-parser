@@ -9,17 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
-      // Alias fs/promises to empty module for browser compatibility
-      "fs/promises": resolve(__dirname, "./src/lib/empty.ts"),
-      buffer: "buffer",
     },
-  },
-  define: {
-    // Polyfill Buffer for browser
-    global: 'globalThis',
-  },
-  optimizeDeps: {
-    include: ['buffer'],
   },
   base: process.env.NODE_ENV === 'production' ? '/mac-online-resource-fork-parser/' : '/',
 });

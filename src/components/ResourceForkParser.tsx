@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from "react";
 import {
   saveToJson,
   loadBytesFromJsonAsync,
-  resourceForkFromBytes,
+  load,
   type ResourceFork,
   type Result as RsrcResult,
 } from "@lachlanbwwright/rsrcdump-ts";
