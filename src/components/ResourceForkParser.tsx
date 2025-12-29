@@ -93,7 +93,7 @@ export default function ResourceForkParser() {
       }
 
       // Try to parse the raw resource fork to get raw data for each four-letter code
-      const resourceForkResult = resourceForkFromBytes(data);
+      const resourceForkResult = await load(data);
       const resourceFork: ResourceFork | null = isOk(resourceForkResult as RsrcResult<ResourceFork, string>) ? (resourceForkResult as { value: ResourceFork }).value : null;
       
       if (isErr(resourceForkResult as RsrcResult<ResourceFork, string>)) {
