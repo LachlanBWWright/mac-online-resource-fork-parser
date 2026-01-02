@@ -42,7 +42,7 @@ import type {
   StructDataType
 } from "./resource-fork-parser/types";
 import FourLetterCodeSpecification from "./resource-fork-parser/FourLetterCodeSpecification";
-import { generateTypeScriptInterfaces } from "./resource-fork-parser/TypeScriptGenerator";
+import { generateTypeScriptInterfacesFromSpecs } from "./resource-fork-parser/TypeScriptGenerator";
 
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
@@ -240,29 +240,33 @@ export default function ResourceForkParser() {
           
           if (type !== "x") nameIndex++;
         } else {
-          // Regular data type
-          if (isArray && count > 10) {
-            // Large array - create single field
+          // Regular data type - always preserve the count from the spec
+          // For count > 1, this represents multiple values with consecutive names
+          if (count > 1) {
+            // Collect names for this multi-value field
+            const names: string[] = [];
+            for (let j = 0; j < count; j++) {
+              names.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
+            }
+            // Create a single field entry with count > 1, using comma-separated names
             dataTypes.push({
               id: fieldIndex.toString(),
               type,
               count,
-              description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
+              description: names.join(','),
+            });
+            nameIndex += count;
+            fieldIndex++;
+          } else {
+            // Single value field
+            dataTypes.push({
+              id: fieldIndex.toString(),
+              type,
+              count: 1,
+              description: nameTokens[nameIndex] || `field_${fieldIndex}`,
             });
             nameIndex++;
             fieldIndex++;
-          } else {
-            // Small count - create individual fields
-            for (let j = 0; j < count; j++) {
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type,
-                count: 1,
-                description: nameTokens[nameIndex] || `field_${fieldIndex}`,
-              });
-              nameIndex++;
-              fieldIndex++;
-            }
           }
         }
       }
@@ -304,19 +308,19 @@ export default function ResourceForkParser() {
 
   // Download TypeScript interfaces
   const downloadTypeScript = useCallback(() => {
-    if (!parsedResult?.data) {
-      error("No parsed data available for TypeScript generation");
+    if (fourLetterCodes.length === 0) {
+      error("No specifications available for TypeScript generation");
       return;
     }
 
     try {
-      const tsContent = generateTypeScriptInterfaces(parsedResult.data);
+      const tsContent = generateTypeScriptInterfacesFromSpecs(fourLetterCodes);
       const blob = new Blob([tsContent], { type: "text/typescript" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${
-        parsedResult.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"
+        parsedResult?.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"
       }-types.ts`;
       document.body.appendChild(a);
       a.click();
@@ -335,7 +339,7 @@ export default function ResourceForkParser() {
         description: "Failed to generate TypeScript interfaces",
       });
     }
-  }, [parsedResult, success, error]);
+  }, [fourLetterCodes, parsedResult, success, error]);
 
   const parseWithSpecs = useCallback(
     async (data: Uint8Array, specs: FourLetterCodeSpec[]): Promise<Result<{ result: unknown; updatedSpecs: FourLetterCodeSpec[] }, string>> => {
@@ -549,11 +553,8 @@ export default function ResourceForkParser() {
           ...existing,
           ...updates,
         } as DataTypeField;
-        if (
-          !(merged.type === "s" || merged.type === "p" || merged.type === "x")
-        ) {
-          merged.count = 1;
-        } else if (!merged.count || merged.count < 1) {
+        // Ensure count is at least 1
+        if (!merged.count || merged.count < 1) {
           merged.count = 1;
         }
 

@@ -26,5 +26,8 @@
 }
 
 @layer base {
-
+  html, body {
+    background-color: rgb(var(--background));
+    min-height: 100%;
+  }
 }

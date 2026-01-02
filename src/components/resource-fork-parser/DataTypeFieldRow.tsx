@@ -67,13 +67,6 @@ export default function DataTypeFieldRow({
               }
               className="w-20 bg-gray-700 border-gray-600 text-white"
               min="1"
-              disabled={
-                !(
-                  dataType.type === "s" ||
-                  dataType.type === "p" ||
-                  dataType.type === "x"
-                )
-              }
             />
           </TableCell>
         )}
