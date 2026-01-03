@@ -208,6 +208,7 @@ function parseAndRoundtrip(specLine: string): string {
 }
 
 describe('Spec Roundtrip', () => {
+  // These specs match the otto-specs.txt file exactly (without numbered prefixes)
   const ottomaticSpecs = [
     "Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints",
     "alis:422B+:alias_data",
@@ -225,6 +226,13 @@ describe('Spec Roundtrip', () => {
     "FnNb:ii+:x,z",
     "Liqd:HxxIihxxi200fffhhhh+:type,flags,height,numNubs,reserved,x\`y[100],hotSpotX,hotSpotZ,bBoxTop,bBoxLeft,bBoxBottom,bBoxRight"
   ];
+
+  it('all specs roundtrip correctly', () => {
+    for (const spec of ottomaticSpecs) {
+      const result = parseAndRoundtrip(spec);
+      expect(result).toBe(spec);
+    }
+  });
 
   ottomaticSpecs.forEach((spec) => {
     const fourCC = spec.split(':')[0];
