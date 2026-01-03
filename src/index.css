@@ -26,19 +26,24 @@
 }
 
 @layer base {
-  html, body, #root {
-    background-color: rgb(var(--background));
-    min-height: 100%;
-  }
-  
-  /* Ensure consistent background color when overscrolling */
+  /* Ensure consistent background color everywhere including overscroll */
   html {
     height: 100%;
-    background-color: rgb(var(--background));
+    min-height: 100%;
+    background-color: rgb(var(--background)) !important;
     overscroll-behavior: none;
+    overscroll-behavior-y: none;
   }
   
   body {
+    min-height: 100vh;
+    height: 100%;
+    background-color: rgb(var(--background)) !important;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+  
+  #root {
     min-height: 100vh;
     background-color: rgb(var(--background));
   }
