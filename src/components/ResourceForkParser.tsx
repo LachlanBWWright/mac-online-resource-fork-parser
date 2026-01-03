@@ -48,6 +48,7 @@ const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
   { value: "l", label: "l - Signed Long (4 bytes)" },
   { value: "i", label: "i - Signed Int (4 bytes)" },
+  { value: "I", label: "I - Unsigned Int (4 bytes)" },
   { value: "h", label: "h - Signed Short (2 bytes)" },
   { value: "H", label: "H - Unsigned Short (2 bytes)" },
   { value: "f", label: "f - Float (4 bytes)" },
@@ -151,129 +152,160 @@ export default function ResourceForkParser() {
     [],
   );
 
-  // Helper function to parse spec strings with proper handling of spaces, backticks, and special characters
-  const parseSpecString = useCallback((specStr: string, nameTokens: string[], isArray: boolean): DataTypeField[] => {
+  // Helper function to parse spec strings character-by-character with proper handling of all patterns
+  const parseSpecString = useCallback((specStr: string, nameTokens: string[]): DataTypeField[] => {
     const dataTypes: DataTypeField[] = [];
-    
-    // Tokenize: split by spaces
-    const tokens: string[] = [];
-    let currentToken = "";
-    let i = 0;
-    
-    while (i < specStr.length) {
-      const char = specStr[i];
-      
-      if (char === ' ') {
-        if (currentToken) {
-          tokens.push(currentToken);
-          currentToken = "";
-        }
-        i++;
-      } else {
-        currentToken += char;
-        i++;
-      }
-    }
-    if (currentToken) tokens.push(currentToken);
-    
-    // Process tokens
-    let tokenIndex = 0;
+    let currentIndex = 0;
     let fieldIndex = 1;
     let nameIndex = 0;
-    
-    while (tokenIndex < tokens.length) {
-      const token = tokens[tokenIndex];
-      
-      // Regular token: 200f, x, 2x, x?, H, etc.
-      const typeMatch = token.match(/^(\d+)?([A-Za-z])(\?)?$/);
-      if (typeMatch) {
-        const count = typeMatch[1] ? parseInt(typeMatch[1]) : 1;
-        const type = typeMatch[2] as StructDataType;
-        const isOptional = typeMatch[3] === '?';
-        
-        // Check if the current name token has a backtick array pattern
+
+    while (currentIndex < specStr.length) {
+      // Skip spaces
+      if (specStr[currentIndex] === ' ') {
+        currentIndex++;
+        continue;
+      }
+
+      // Check for optional padding marker (x?)
+      if (specStr.slice(currentIndex, currentIndex + 2) === 'x?') {
+        // Optional padding gets a name
+        dataTypes.push({
+          id: fieldIndex.toString(),
+          type: 'x',
+          count: 1,
+          description: nameTokens[nameIndex] || '',
+          isOptionalPadding: true,
+        });
+        currentIndex += 2;
+        nameIndex++;
+        fieldIndex++;
+        continue;
+      }
+
+      // Check for count+type pattern (e.g., "5i", "40x", "422B", "200f")
+      const countTypeMatch = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
+      if (countTypeMatch) {
+        const count = parseInt(countTypeMatch[1]);
+        const type = countTypeMatch[2] as StructDataType;
+        currentIndex += countTypeMatch[0].length;
+
+        if (type === 'x') {
+          // Padding bytes - no name
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: 'x',
+            count: count,
+            description: '',
+            isPadding: true,
+          });
+          fieldIndex++;
+          continue;
+        }
+
+        // Check if the current name is an array pattern like x`y[100]
         const currentName = nameTokens[nameIndex];
-        const backtickMatch = currentName?.match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]$/);
+        const arrayPatternMatch = currentName ? currentName.match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]$/) : null;
         
-        if (backtickMatch && (isArray && count > 10)) {
-          // This is an array field pattern like x`y[100]
-          const fieldNames = backtickMatch[1].split('`');
-          const arraySize = parseInt(backtickMatch[2]);
-          
-          // The current token (e.g., "200f") defines the types for this array
-          const arrayFields: Array<{ name: string; type: StructDataType }> = fieldNames.map(name => ({
-            name: name.trim(),
-            type,
-          }));
+        if (arrayPatternMatch) {
+          // This is an array field like x`y[100]
+          const fieldNames = arrayPatternMatch[1].split('`');
+          const arraySize = parseInt(arrayPatternMatch[2]);
           
           dataTypes.push({
             id: fieldIndex.toString(),
-            type,
-            count: 1,
+            type: type,
+            count: count,
             description: currentName,
             isArrayField: true,
-            arraySize,
-            arrayFields,
+            arraySize: arraySize,
+            arrayFields: fieldNames.map(name => ({ name: name.trim(), type: type })),
           });
           
           nameIndex++;
           fieldIndex++;
-          tokenIndex++;
           continue;
         }
         
-        // Handle padding/string types
-        if (type === "s" || type === "p" || type === "x") {
-          const desc = type === "x" 
-            ? (isOptional ? "padding?" : "")
-            : (nameTokens[nameIndex] || `field_${fieldIndex}`);
-          
-          if (type !== "x" || !isOptional) {
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type,
-              count,
-              description: desc,
-            });
-            fieldIndex++;
+        // For regular types with count, check if we have enough names
+        const remainingNames = nameTokens.length - nameIndex;
+        
+        if (remainingNames >= count) {
+          // We have separate names for each - store as expanded group
+          const groupNames: string[] = [];
+          for (let j = 0; j < count; j++) {
+            groupNames.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
           }
           
-          if (type !== "x") nameIndex++;
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: type,
+            count: count,
+            description: groupNames.join(','),
+            isExpandedGroup: true,
+          });
+          
+          nameIndex += count;
+          fieldIndex++;
         } else {
-          // Regular data type - always preserve the count from the spec
-          // For count > 1, this represents multiple values with consecutive names
-          if (count > 1) {
-            // Collect names for this multi-value field
-            const names: string[] = [];
-            for (let j = 0; j < count; j++) {
-              names.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
-            }
-            // Create a single field entry with count > 1, using comma-separated names
+          // Keep as single field with count
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: type,
+            count: count,
+            description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+          });
+          nameIndex++;
+          fieldIndex++;
+        }
+        continue;
+      }
+
+      // Single character type (e.g., "L", "H", "f", "h", "I")
+      const singleTypeMatch = specStr.slice(currentIndex).match(/^([A-Za-z])(\?)?/);
+      if (singleTypeMatch) {
+        const type = singleTypeMatch[1] as StructDataType;
+        const isOptional = singleTypeMatch[2] === '?';
+        currentIndex += singleTypeMatch[0].length;
+
+        if (type === 'x') {
+          // Single padding byte
+          if (isOptional) {
             dataTypes.push({
               id: fieldIndex.toString(),
-              type,
-              count,
-              description: names.join(','),
-            });
-            nameIndex += count;
-            fieldIndex++;
-          } else {
-            // Single value field
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type,
+              type: 'x',
               count: 1,
-              description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+              description: nameTokens[nameIndex] || '',
+              isOptionalPadding: true,
             });
             nameIndex++;
-            fieldIndex++;
+          } else {
+            dataTypes.push({
+              id: fieldIndex.toString(),
+              type: 'x',
+              count: 1,
+              description: '',
+              isPadding: true,
+            });
           }
+          fieldIndex++;
+          continue;
         }
+
+        dataTypes.push({
+          id: fieldIndex.toString(),
+          type: type,
+          count: 1,
+          description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+        });
+        nameIndex++;
+        fieldIndex++;
+        continue;
       }
-      
-      tokenIndex++;
+
+      // Unknown character, skip
+      currentIndex++;
     }
-    
+
     return dataTypes.length > 0 ? dataTypes : [{
       id: "1",
       type: "i",
@@ -285,18 +317,24 @@ export default function ResourceForkParser() {
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
-      if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
-        // Handle array field like x`y[100] with individual types for each field
-        const fieldSpecs = dataType.arrayFields
-          .map((field) => field.type)
-          .join(" ");
-        const fieldNames = dataType.arrayFields
-          .map((field) => field.name)
-          .join("`");
-        result += `${fieldSpecs} ${fieldNames}[${dataType.arraySize}]`;
+      if (dataType.isOptionalPadding) {
+        // Optional padding: x?
+        result += "x?";
+      } else if (dataType.isPadding) {
+        // Regular padding: x, 2x, 40x
+        if (dataType.count > 1) {
+          result += `${dataType.count}x`;
+        } else {
+          result += "x";
+        }
+      } else if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
+        // Array field like x`y[100] - output the count (total values)
+        result += `${dataType.count}${dataType.type}`;
       } else if (dataType.count > 1) {
+        // Regular field with count > 1
         result += `${dataType.count}${dataType.type}`;
       } else {
+        // Single field
         result += dataType.type;
       }
     }
@@ -778,7 +816,7 @@ export default function ResourceForkParser() {
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
           // Use the helper function to parse the spec string
-          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
+          const dataTypes = parseSpecString(specStr, nameTokens);
 
           return {
             fourCC,
@@ -957,7 +995,9 @@ export default function ResourceForkParser() {
       const specs = fourLetterCodes
         .map((spec) => {
           const structSpec = generateStructSpec(spec);
+          // Filter out regular padding from descriptions
           const description = spec.dataTypes
+            .filter((dt) => !dt.isPadding)
             .map((dt) => dt.description)
             .join(",");
           return `${spec.fourCC}:${structSpec}:${description}`;
@@ -1013,7 +1053,7 @@ export default function ResourceForkParser() {
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
           // Use the helper function to parse the spec string
-          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
+          const dataTypes = parseSpecString(specStr, nameTokens);
 
           // Find existing spec to preserve rawData
           const existingSpec = fourLetterCodes.find(s => s.fourCC === fourCC);

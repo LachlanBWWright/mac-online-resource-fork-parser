@@ -52,8 +52,24 @@ function generateFieldsFromDataTypes(dataTypes: DataTypeField[], indent: string)
   let fields = "";
 
   for (const dataType of dataTypes) {
+    // Skip padding bytes (regular padding without meaning)
+    if (dataType.isPadding) {
+      continue;
+    }
+
     // Skip padding bytes (x type) without descriptions
     if (dataType.type === "x" && !dataType.description) {
+      continue;
+    }
+
+    // For expanded groups, generate separate fields for each name
+    if (dataType.isExpandedGroup && dataType.description.includes(',')) {
+      const names = dataType.description.split(',');
+      const tsType = getTypeScriptTypeFromStructType(dataType.type);
+      for (const name of names) {
+        const fieldName = getSafeFieldName(name.trim());
+        fields += `${indent}${fieldName}: ${tsType};\n`;
+      }
       continue;
     }
 
@@ -66,8 +82,8 @@ function generateFieldsFromDataTypes(dataTypes: DataTypeField[], indent: string)
         .map(af => `${getSafeFieldName(af.name)}: ${getTypeScriptTypeFromStructType(af.type)}`)
         .join("; ");
       fields += `${indent}${fieldName}: Array<{ ${subFields} }>;\n`;
-    } else if (dataType.count > 1) {
-      // Array of values
+    } else if (dataType.count > 1 && !dataType.isExpandedGroup) {
+      // Array of values (non-expanded, like 450i with single name)
       const baseType = getTypeScriptTypeFromStructType(dataType.type);
       fields += `${indent}${fieldName}: ${baseType}[];\n`;
     } else {
