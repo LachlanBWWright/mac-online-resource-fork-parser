@@ -1,5 +1,5 @@
 Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints
-alis:422B+:alias_data
+alis:422s+:alias_data
 Atrb:HBB+:flags,p0,p1
 STgd:x?H+:isEmpty,superTileId
 Layr:H+:TileAttributeIndex

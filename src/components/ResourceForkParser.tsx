@@ -54,6 +54,7 @@ const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "f", label: "f - Float (4 bytes)" },
   { value: "B", label: "B - Unsigned Byte (1 byte)" },
   { value: "b", label: "b - Signed Byte (1 byte)" },
+  { value: "?", label: "? - Boolean (1 byte)" },
   { value: "x", label: "x - Padding Byte (1 byte)" },
   { value: "s", label: "s - String" },
   { value: "p", label: "p - Pascal String" },
@@ -153,6 +154,7 @@ export default function ResourceForkParser() {
   );
 
   // Helper function to parse spec strings character-by-character with proper handling of all patterns
+  // According to Python struct: ? = boolean (1 byte), x = padding (no field name)
   const parseSpecString = useCallback((specStr: string, nameTokens: string[]): DataTypeField[] => {
     const dataTypes: DataTypeField[] = [];
     let currentIndex = 0;
@@ -166,31 +168,15 @@ export default function ResourceForkParser() {
         continue;
       }
 
-      // Check for optional padding marker (x?)
-      if (specStr.slice(currentIndex, currentIndex + 2) === 'x?') {
-        // Optional padding gets a name
-        dataTypes.push({
-          id: fieldIndex.toString(),
-          type: 'x',
-          count: 1,
-          description: nameTokens[nameIndex] || '',
-          isOptionalPadding: true,
-        });
-        currentIndex += 2;
-        nameIndex++;
-        fieldIndex++;
-        continue;
-      }
-
       // Check for count+type pattern (e.g., "5i", "40x", "422B", "200f")
-      const countTypeMatch = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z])/);
+      const countTypeMatch = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z?])/);
       if (countTypeMatch) {
         const count = parseInt(countTypeMatch[1]);
         const type = countTypeMatch[2] as StructDataType;
         currentIndex += countTypeMatch[0].length;
 
         if (type === 'x') {
-          // Padding bytes - no name
+          // Padding bytes - no name (description should be empty)
           dataTypes.push({
             id: fieldIndex.toString(),
             type: 'x',
@@ -260,37 +246,26 @@ export default function ResourceForkParser() {
         continue;
       }
 
-      // Single character type (e.g., "L", "H", "f", "h", "I")
-      const singleTypeMatch = specStr.slice(currentIndex).match(/^([A-Za-z])(\?)?/);
+      // Single character type (e.g., "L", "H", "f", "h", "I", "?", "x")
+      const singleTypeMatch = specStr.slice(currentIndex).match(/^([A-Za-z?])/);
       if (singleTypeMatch) {
         const type = singleTypeMatch[1] as StructDataType;
-        const isOptional = singleTypeMatch[2] === '?';
         currentIndex += singleTypeMatch[0].length;
 
         if (type === 'x') {
-          // Single padding byte
-          if (isOptional) {
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type: 'x',
-              count: 1,
-              description: nameTokens[nameIndex] || '',
-              isOptionalPadding: true,
-            });
-            nameIndex++;
-          } else {
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type: 'x',
-              count: 1,
-              description: '',
-              isPadding: true,
-            });
-          }
+          // Single padding byte - no name (description should be empty)
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: 'x',
+            count: 1,
+            description: '',
+            isPadding: true,
+          });
           fieldIndex++;
           continue;
         }
 
+        // Regular type (including ? for boolean) gets a name
         dataTypes.push({
           id: fieldIndex.toString(),
           type: type,
@@ -317,11 +292,8 @@ export default function ResourceForkParser() {
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
-      if (dataType.isOptionalPadding) {
-        // Optional padding: x?
-        result += "x?";
-      } else if (dataType.isPadding) {
-        // Regular padding: x, 2x, 40x
+      if (dataType.isPadding) {
+        // Padding: x, 2x, 40x
         if (dataType.count > 1) {
           result += `${dataType.count}x`;
         } else {
@@ -334,7 +306,7 @@ export default function ResourceForkParser() {
         // Regular field with count > 1
         result += `${dataType.count}${dataType.type}`;
       } else {
-        // Single field
+        // Single field (including boolean ? type)
         result += dataType.type;
       }
     }

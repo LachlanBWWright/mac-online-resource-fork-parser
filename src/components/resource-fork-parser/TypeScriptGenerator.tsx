@@ -8,12 +8,15 @@ function getTypeScriptTypeFromStructType(type: StructDataType): string {
     case "L": // Unsigned Long (4 bytes)
     case "l": // Signed Long (4 bytes)
     case "i": // Signed Int (4 bytes)
+    case "I": // Unsigned Int (4 bytes)
     case "h": // Signed Short (2 bytes)
     case "H": // Unsigned Short (2 bytes)
     case "f": // Float (4 bytes)
     case "B": // Unsigned Byte (1 byte)
     case "b": // Signed Byte (1 byte)
       return "number";
+    case "?": // Boolean (1 byte)
+      return "boolean";
     case "s": // String
     case "p": // Pascal String
       return "string";

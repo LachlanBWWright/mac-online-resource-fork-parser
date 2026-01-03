@@ -27,6 +27,9 @@ export default function DataTypeFieldRow({
   removeDataType,
   dataTypeOptions,
 }: DataTypeFieldRowProps) {
+  // Padding bytes (x type) should not have editable descriptions
+  const isPaddingType = dataType.type === 'x' || dataType.isPadding;
+  
   return (
     <>
       <TableRow className={`border-gray-600 ${dataType.isArrayField ? "bg-gray-750" : ""}`}>
@@ -78,6 +81,8 @@ export default function DataTypeFieldRow({
               updateDataType={updateDataType}
               dataTypeOptions={dataTypeOptions}
             />
+          ) : isPaddingType ? (
+            <span className="text-gray-500 italic">No field name (padding)</span>
           ) : (
             <Input
               value={dataType.description}

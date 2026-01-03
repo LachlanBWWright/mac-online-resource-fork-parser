@@ -19,7 +19,7 @@ export interface ParsedResult {
   filename?: string;
 }
 
-export type StructDataType = "L" | "l" | "i" | "I" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p";
+export type StructDataType = "L" | "l" | "i" | "I" | "h" | "H" | "f" | "B" | "b" | "x" | "s" | "p" | "?";
 
 export interface ArrayFieldSpec {
   name: string;
@@ -34,8 +34,7 @@ export interface DataTypeField {
   isArrayField?: boolean;
   arraySize?: number;
   arrayFields?: ArrayFieldSpec[];
-  isPadding?: boolean; // True for regular padding bytes (x, 2x, 40x)
-  isOptionalPadding?: boolean; // True for optional padding (x?)
+  isPadding?: boolean; // True for padding bytes (x, 2x, 40x) - description should be empty/disabled
   isExpandedGroup?: boolean; // True for fields originally in Ni format with N separate names
 }
 
