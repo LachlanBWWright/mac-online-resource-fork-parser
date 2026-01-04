@@ -30,6 +30,9 @@ import {
   X,
   AlertTriangle,
   Code,
+  FileJson,
+  Edit3,
+  Package,
 } from "lucide-react";
 import { useToast } from "../lib/toast";
 
@@ -870,6 +873,86 @@ export default function ResourceForkParser() {
     }
   }, [extractFourLetterCodes, parseSpecString, parseWithSpecs]);
 
+  // Load EarthFarm sample file without struct specs - for users to define their own
+  const loadEarthFarmSampleNoSpecs = useCallback(async () => {
+    setParseError("");
+    setIsProcessing(true);
+
+    try {
+      // Try fetching with the correct base path for the current environment
+      const basePath = import.meta.env.DEV ? '' : '/mac-online-resource-fork-parser';
+      
+      const response = await fetch(`${basePath}/test-files/EarthFarm.ter.rsrc`);
+      if (!response.ok) {
+        throw new Error("Failed to load EarthFarm sample file");
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const file = new File([data], "EarthFarm.ter.rsrc");
+
+      // Extract four-letter codes from the file WITHOUT loading Otto specs
+      const extractedResult = await extractFourLetterCodes(file);
+      
+      if (isErr(extractedResult)) {
+        setParseError(extractedResult.error);
+        setParsedResult({
+          success: false,
+          error: extractedResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const extractedSpecs = extractedResult.value;
+
+      // Parse with default (undefined) specs
+      const parseResult = await parseWithSpecs(data, extractedSpecs);
+
+      if (isErr(parseResult)) {
+        setParseError(parseResult.error);
+        setParsedResult({
+          success: false,
+          error: parseResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const { result, updatedSpecs } = parseResult.value;
+      setFourLetterCodes(updatedSpecs);
+      setCurrentFile(file);
+
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: "EarthFarm.ter.rsrc",
+        });
+      }
+      
+      info({
+        title: "Sample Loaded",
+        description: "EarthFarm sample loaded without struct specs. Define specs for each four-letter code to properly parse the data.",
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to load EarthFarm sample";
+      setParseError(errorMessage);
+      setParsedResult({
+        success: false,
+        error: errorMessage,
+        filename: "EarthFarm.ter.rsrc",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [extractFourLetterCodes, parseWithSpecs, info]);
+
   // Handle JSON upload
   const handleJsonUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1056,6 +1139,9 @@ export default function ResourceForkParser() {
 
   // Function removed - now using SampleDataDisplay component
 
+  // Check if data is loaded
+  const hasDataLoaded = currentFile !== null || parsedResult?.success;
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -1065,181 +1151,235 @@ export default function ResourceForkParser() {
             Mac Resource Fork Parser
           </h1>
           <p className="text-gray-400 text-lg">
-            Upload a resource fork file to analyze and experiment with data
-            types
+            {hasDataLoaded 
+              ? `Editing: ${currentFile?.name || parsedResult?.filename || 'Resource Fork'}`
+              : "Upload a resource fork file to analyze and experiment with data types"
+            }
           </p>
-          <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
-            <div className="flex items-center gap-2 text-yellow-200">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="font-medium">Work In Progress</span>
+          {!hasDataLoaded && (
+            <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
+              <div className="flex items-center gap-2 text-yellow-200">
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-medium">Work In Progress</span>
+              </div>
+              <p className="text-yellow-100 text-sm mt-1">
+                This application is under active development. Features may be
+                incomplete, and parsing results should be verified. Use with
+                caution for production data.
+              </p>
             </div>
-            <p className="text-yellow-100 text-sm mt-1">
-              This application is under active development. Features may be
-              incomplete, and parsing results should be verified. Use with
-              caution for production data.
-            </p>
-          </div>
+          )}
         </div>
 
-        {/* File Operations & Specifications - Combined */}
+        {/* Main Control Panel */}
         <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <FileText className="h-5 w-5" />
-              File Operations & Specifications
-            </CardTitle>
-            <CardDescription className="text-gray-400">
-              Upload files to parse, manage specifications, or try the sample
-              file
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Upload Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Upload .rsrc file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Upload .rsrc File
-                </label>
-                <Input
-                  type="file"
-                  accept=".rsrc"
-                  onChange={handleFileUpload}
-                  ref={fileInputRef}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={isProcessing}
-                  size="lg"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Choose .rsrc File
-                </Button>
-              </div>
-
-              {/* Upload JSON file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Upload .json File
-                </label>
-                <Input
-                  type="file"
-                  accept=".json"
-                  onChange={handleJsonUpload}
-                  ref={jsonInputRef}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => jsonInputRef.current?.click()}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                  disabled={isProcessing || fourLetterCodes.length === 0}
-                  size="lg"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Convert from JSON
-                </Button>
-              </div>
-
-              {/* Sample file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Sample File
-                </label>
-                <Button
-                  onClick={loadEarthFarmSample}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                  disabled={isProcessing}
-                  size="lg"
-                >
-                  Load EarthFarm Sample
-                </Button>
-              </div>
-            </div>
-
-            {/* Specifications Management */}
-            <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
-              <CollapsibleTrigger asChild>
-                <div className="border-t border-gray-700 pt-6">
-                  <div className="flex items-center justify-between cursor-pointer hover:bg-gray-700 p-3 rounded transition-colors">
-                    <div className="flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      <span className="font-medium text-gray-200">
-                        Specification Management
-                      </span>
-                    </div>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        saveLoadOpen ? "rotate-180" : ""
-                      }`}
+          {!hasDataLoaded ? (
+            // Initial state - show upload options prominently
+            <>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Upload className="h-5 w-5" />
+                  Get Started
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Upload a resource fork file or load a sample to begin
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Primary upload options */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Upload .rsrc file */}
+                  <div className="space-y-3">
+                    <Input
+                      type="file"
+                      accept=".rsrc"
+                      onChange={handleFileUpload}
+                      ref={fileInputRef}
+                      className="hidden"
                     />
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full h-24 bg-green-600 hover:bg-green-700 text-white flex-col gap-2"
+                      disabled={isProcessing}
+                      size="lg"
+                    >
+                      <Upload className="h-8 w-8" />
+                      <span className="text-lg">Upload .rsrc File</span>
+                    </Button>
+                  </div>
+
+                  {/* Sample files */}
+                  <div className="space-y-3">
+                    <Button
+                      onClick={loadEarthFarmSample}
+                      className="w-full h-24 bg-orange-600 hover:bg-orange-700 text-white flex-col gap-2"
+                      disabled={isProcessing}
+                      size="lg"
+                    >
+                      <Package className="h-8 w-8" />
+                      <span className="text-lg">Load Sample (with Specs)</span>
+                    </Button>
                   </div>
                 </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="pt-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-300">
-                        Save Current Specifications
-                      </label>
-                      <Button
-                        onClick={saveSpecifications}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={fourLetterCodes.length === 0}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Save Specifications
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-300">
-                        Load Specifications from File
-                      </label>
+
+                {/* Secondary option - sample without specs */}
+                <div className="border-t border-gray-700 pt-4">
+                  <p className="text-sm text-gray-400 mb-3">
+                    Want to define your own struct specs? Load the sample without pre-configured specifications:
+                  </p>
+                  <Button
+                    onClick={loadEarthFarmSampleNoSpecs}
+                    variant="outline"
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
+                    disabled={isProcessing}
+                  >
+                    <Edit3 className="h-4 w-4 mr-2" />
+                    Load Sample (Define Your Own Specs)
+                  </Button>
+                </div>
+              </CardContent>
+            </>
+          ) : (
+            // Data loaded - show compact toolbar
+            <>
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <FileText className="h-5 w-5" />
+                    {currentFile?.name || parsedResult?.filename || 'Resource Fork'}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCurrentFile(null);
+                      setParsedResult(null);
+                      setFourLetterCodes([]);
+                      setParseError("");
+                    }}
+                    className="text-gray-400 hover:text-white border-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Close
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Compact action bar */}
+                <div className="flex flex-wrap gap-3">
+                  {/* File operations */}
+                  <Input
+                    type="file"
+                    accept=".rsrc"
+                    onChange={handleFileUpload}
+                    ref={fileInputRef}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessing}
+                    className="border-gray-600"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    New File
+                  </Button>
+
+                  <div className="w-px h-6 bg-gray-600 self-center" />
+
+                  {/* Spec management */}
+                  <Input
+                    type="file"
+                    accept=".txt"
+                    onChange={handleSpecUpload}
+                    ref={specFileInputRef}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => specFileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600"
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    Load Specs
+                  </Button>
+                  <Button
+                    onClick={saveSpecifications}
+                    variant="outline"
+                    size="sm"
+                    disabled={fourLetterCodes.length === 0}
+                    className="border-gray-600"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Save Specs
+                  </Button>
+
+                  <div className="w-px h-6 bg-gray-600 self-center" />
+
+                  {/* Export */}
+                  <Button
+                    onClick={downloadJson}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={!parsedResult?.success}
+                  >
+                    <FileJson className="h-4 w-4 mr-1" />
+                    Export JSON
+                  </Button>
+                  <Button
+                    onClick={downloadTypeScript}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    disabled={fourLetterCodes.length === 0}
+                  >
+                    <Code className="h-4 w-4 mr-1" />
+                    Export TypeScript
+                  </Button>
+                </div>
+
+                {/* Convert JSON to RSRC - hidden in collapsible */}
+                <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-400 hover:text-white p-0 h-auto"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 mr-1 transition-transform ${
+                          saveLoadOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                      More Options
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="pt-4 flex gap-3">
                       <Input
                         type="file"
-                        accept=".txt"
-                        onChange={handleSpecUpload}
-                        ref={specFileInputRef}
+                        accept=".json"
+                        onChange={handleJsonUpload}
+                        ref={jsonInputRef}
                         className="hidden"
                       />
                       <Button
-                        onClick={() => specFileInputRef.current?.click()}
-                        className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+                        onClick={() => jsonInputRef.current?.click()}
+                        variant="outline"
+                        size="sm"
+                        disabled={isProcessing || fourLetterCodes.length === 0}
+                        className="border-gray-600"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Load Specifications
+                        <Upload className="h-4 w-4 mr-1" />
+                        Convert JSON to RSRC
                       </Button>
                     </div>
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Download Buttons - Prominent */}
-            {parsedResult?.success && (
-              <div className="pt-6 border-t border-gray-700 space-y-3">
-                <Button
-                  onClick={downloadJson}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg py-4"
-                  size="lg"
-                >
-                  <Download className="h-5 w-5 mr-2" />
-                  Download as JSON
-                </Button>
-                <Button
-                  onClick={downloadTypeScript}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Code className="h-5 w-5 mr-2" />
-                  Download TypeScript Interfaces
-                </Button>
-              </div>
-            )}
-          </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </>
+          )}
         </Card>
 
         {/* Error Display */}
