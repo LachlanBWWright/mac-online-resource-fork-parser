@@ -28,6 +28,9 @@ const TYPE_SIZES: Record<StructDataType, number> = {
   'p': 1, // Pascal String (per character)
 };
 
+// Padding type constant
+const PADDING_TYPE = 'x' as const;
+
 // Helper to convert bytes to hex string
 function bytesToHex(bytes: Uint8Array, maxLength = 64): string {
   const hex = Array.from(bytes.slice(0, maxLength))
@@ -423,7 +426,7 @@ export default function UndefinedStructEditor({
           <div
             key={field.id}
             className={`flex items-center gap-2 p-2 rounded ${
-              field.type === 'x' ? 'bg-gray-900/50 border border-dashed border-gray-700' : 'bg-gray-900'
+              field.type === PADDING_TYPE ? 'bg-gray-900/50 border border-dashed border-gray-700' : 'bg-gray-900'
             }`}
           >
             <span className="text-gray-400 text-xs w-6">{index + 1}.</span>
@@ -462,13 +465,13 @@ export default function UndefinedStructEditor({
 
             <Input
               type="text"
-              value={field.type === 'x' ? '' : field.description}
+              value={field.type === PADDING_TYPE ? '' : field.description}
               onChange={(e) =>
                 handleFieldChange(field.id, "description", e.target.value)
               }
               className="flex-1 h-8 text-sm"
-              placeholder={field.type === 'x' ? '(padding - no field name)' : 'Field name'}
-              disabled={field.type === 'x'}
+              placeholder={field.type === PADDING_TYPE ? '(padding - no field name)' : 'Field name'}
+              disabled={field.type === PADDING_TYPE}
             />
 
             <span className="text-gray-500 text-xs w-12 text-right">

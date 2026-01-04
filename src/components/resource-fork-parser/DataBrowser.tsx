@@ -38,6 +38,11 @@ interface EditState {
   originalValue: unknown;
 }
 
+// Constants for validation and display
+const FOUR_LETTER_CODE_REGEX = /^[A-Za-z0-9]{4}$/;
+const STRING_DISPLAY_MAX_LENGTH = 100;
+const RAW_DATA_DISPLAY_MAX_LENGTH = 200;
+
 export default function DataBrowser({ data, onDataChange, readOnly = false }: DataBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
@@ -52,7 +57,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     if (!data || typeof data !== "object") return [];
     
     return Object.entries(data)
-      .filter(([key]) => key.length === 4 && /^[A-Za-z0-9]{4}$/.test(key))
+      .filter(([key]) => key.length === 4 && FOUR_LETTER_CODE_REGEX.test(key))
       .map(([fourCC, resources]) => ({
         fourCC,
         resources: resources as Record<string, ResourceEntry>,
@@ -287,7 +292,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     }
 
     if (typeof value === "string") {
-      const displayValue = value.length > 100 ? value.substring(0, 100) + "..." : value;
+      const displayValue = value.length > STRING_DISPLAY_MAX_LENGTH ? value.substring(0, STRING_DISPLAY_MAX_LENGTH) + "..." : value;
       return (
         <div className="flex items-center gap-2 group">
           <span className="text-green-400 font-mono text-sm break-all">&quot;{displayValue}&quot;</span>
@@ -524,8 +529,8 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                               <div>
                                 <span className="text-gray-400 text-xs">Raw Data:</span>
                                 <code className="block mt-1 text-xs text-gray-300 bg-gray-900 p-2 rounded break-all">
-                                  {resource.data.length > 200 
-                                    ? resource.data.substring(0, 200) + "..." 
+                                  {resource.data.length > RAW_DATA_DISPLAY_MAX_LENGTH 
+                                    ? resource.data.substring(0, RAW_DATA_DISPLAY_MAX_LENGTH) + "..." 
                                     : resource.data}
                                 </code>
                               </div>

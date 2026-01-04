@@ -50,6 +50,9 @@ import FourLetterCodeSpecification from "./resource-fork-parser/FourLetterCodeSp
 import { generateTypeScriptInterfacesFromSpecs } from "./resource-fork-parser/TypeScriptGenerator";
 import DataBrowser from "./resource-fork-parser/DataBrowser";
 
+// Regex to remove numbered prefixes from Otto spec lines (e.g., "1.Hedr:" -> "Hedr:")
+const OTTO_SPEC_NUMBER_PREFIX_REGEX = /^\d+\./;
+
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
   { value: "l", label: "l - Signed Long (4 bytes)" },
@@ -366,7 +369,7 @@ export default function ResourceForkParser() {
         // Use raw Otto specification if available
         if (spec.rawOttoSpec) {
           // Return the raw specification directly, handling numbered prefixes
-          return spec.rawOttoSpec.replace(/^\d+\./, '');
+          return spec.rawOttoSpec.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, '');
         }
         
         const specStr = generateStructSpec(spec);
@@ -780,7 +783,7 @@ export default function ResourceForkParser() {
 
         ottoSpecifications = lines.map((line) => {
           // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
-          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const cleanLine = line.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, ''); // Remove number prefix
           const parts = cleanLine.split(":");
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
@@ -1098,7 +1101,7 @@ export default function ResourceForkParser() {
 
         const loadedSpecs: FourLetterCodeSpec[] = lines.map((line) => {
           // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
-          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const cleanLine = line.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, ''); // Remove number prefix
           const parts = cleanLine.split(":");
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
@@ -1185,7 +1188,7 @@ export default function ResourceForkParser() {
       // Create struct specs array for packing
       const structSpecs = fourLetterCodes.map((spec: FourLetterCodeSpec) => {
         if (spec.rawOttoSpec) {
-          return spec.rawOttoSpec.replace(/^\d+\./, '');
+          return spec.rawOttoSpec.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, '');
         }
         
         const specStr = generateStructSpec(spec);
