@@ -33,6 +33,8 @@ import {
   FileJson,
   Edit3,
   Package,
+  PackageOpen,
+  Database,
 } from "lucide-react";
 import { useToast } from "../lib/toast";
 
@@ -46,6 +48,7 @@ import type {
 } from "./resource-fork-parser/types";
 import FourLetterCodeSpecification from "./resource-fork-parser/FourLetterCodeSpecification";
 import { generateTypeScriptInterfacesFromSpecs } from "./resource-fork-parser/TypeScriptGenerator";
+import DataBrowser from "./resource-fork-parser/DataBrowser";
 
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
@@ -73,6 +76,8 @@ export default function ResourceForkParser() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [saveLoadOpen, setSaveLoadOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"specs" | "data">("specs");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const specFileInputRef = useRef<HTMLInputElement>(null);
@@ -937,10 +942,10 @@ export default function ResourceForkParser() {
         title: "Sample Loaded",
         description: "EarthFarm sample loaded without struct specs. Define specs for each four-letter code to properly parse the data.",
       });
-    } catch (error) {
+    } catch (err) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
+        err instanceof Error
+          ? err.message
           : "Failed to load EarthFarm sample";
       setParseError(errorMessage);
       setParsedResult({
@@ -1135,12 +1140,114 @@ export default function ResourceForkParser() {
     [fourLetterCodes, parseSpecString, reParseWithUpdatedSpecs],
   );
 
+  // Handle data change from DataBrowser
+  const handleDataChange = useCallback(
+    (fourCC: string, resourceId: string, newData: Record<string, unknown>) => {
+      if (!parsedResult?.data) return;
+      
+      const currentData = parsedResult.data as Record<string, Record<string, { obj?: Record<string, unknown> }>>;
+      const updatedData = { ...currentData };
+      
+      if (updatedData[fourCC] && updatedData[fourCC][resourceId]) {
+        updatedData[fourCC] = {
+          ...updatedData[fourCC],
+          [resourceId]: {
+            ...updatedData[fourCC][resourceId],
+            obj: newData
+          }
+        };
+      }
+      
+      setParsedResult({
+        ...parsedResult,
+        data: updatedData
+      });
+      setHasUnsavedChanges(true);
+      
+      info({
+        title: "Data Modified",
+        description: `Updated ${fourCC}/${resourceId}. Use "Pack to RSRC" to save changes.`,
+      });
+    },
+    [parsedResult, info]
+  );
+
+  // Pack edited data back to RSRC file
+  const packToRsrc = useCallback(async () => {
+    if (!parsedResult?.data) {
+      error("No parsed data available for packing");
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Create struct specs array for packing
+      const structSpecs = fourLetterCodes.map((spec: FourLetterCodeSpec) => {
+        if (spec.rawOttoSpec) {
+          return spec.rawOttoSpec.replace(/^\d+\./, '');
+        }
+        
+        const specStr = generateStructSpec(spec);
+        const description = spec.dataTypes
+          .map((dt) => dt.description)
+          .join(",");
+        return `${spec.fourCC}:${specStr}:${description}`;
+      });
+
+      const rsrcResult = await loadBytesFromJsonAsync(parsedResult.data, structSpecs);
+      
+      if (isErr(rsrcResult as RsrcResult<Uint8Array, string>)) {
+        const errMsg = (rsrcResult as { error: string }).error;
+        error({
+          title: "Pack Failed",
+          description: errMsg,
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      // Download as .rsrc file
+      const rsrcData = (rsrcResult as { value: Uint8Array }).value;
+      const blob = new Blob([rsrcData], {
+        type: "application/octet-stream",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const originalName = currentFile?.name || parsedResult.filename || "resource";
+      const baseName = originalName.replace(/\.[^/.]+$/, "");
+      a.download = `${baseName}-edited.rsrc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setHasUnsavedChanges(false);
+      success({
+        title: "RSRC Packed",
+        description: "Resource fork file has been packed and downloaded",
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to pack data";
+      error({
+        title: "Pack Failed",
+        description: errorMessage,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [parsedResult, fourLetterCodes, generateStructSpec, currentFile, success, error]);
+
   // Function removed - now using StatusIcon component
 
   // Function removed - now using SampleDataDisplay component
 
   // Check if data is loaded
   const hasDataLoaded = currentFile !== null || parsedResult?.success;
+  
+  // Extract data for DataBrowser (avoiding unknown type in JSX)
+  const browserData = parsedResult?.data as Record<string, unknown> | undefined;
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
@@ -1247,6 +1354,9 @@ export default function ResourceForkParser() {
                   <CardTitle className="flex items-center gap-2 text-white">
                     <FileText className="h-5 w-5" />
                     {currentFile?.name || parsedResult?.filename || 'Resource Fork'}
+                    {hasUnsavedChanges && (
+                      <span className="text-xs text-yellow-400 font-normal">(modified)</span>
+                    )}
                   </CardTitle>
                   <Button
                     variant="outline"
@@ -1256,6 +1366,8 @@ export default function ResourceForkParser() {
                       setParsedResult(null);
                       setFourLetterCodes([]);
                       setParseError("");
+                      setViewMode("specs");
+                      setHasUnsavedChanges(false);
                     }}
                     className="text-gray-400 hover:text-white border-gray-600"
                   >
@@ -1265,6 +1377,29 @@ export default function ResourceForkParser() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* View mode toggle */}
+                <div className="flex items-center gap-2 border-b border-gray-700 pb-3">
+                  <Button
+                    onClick={() => setViewMode("specs")}
+                    size="sm"
+                    variant={viewMode === "specs" ? "default" : "ghost"}
+                    className={viewMode === "specs" ? "bg-blue-600" : "text-gray-400"}
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    Struct Specs
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode("data")}
+                    size="sm"
+                    variant={viewMode === "data" ? "default" : "ghost"}
+                    className={viewMode === "data" ? "bg-blue-600" : "text-gray-400"}
+                    disabled={!parsedResult?.success}
+                  >
+                    <Database className="h-4 w-4 mr-1" />
+                    Browse Data
+                  </Button>
+                </div>
+
                 {/* Compact action bar */}
                 <div className="flex flex-wrap gap-3">
                   {/* File operations */}
@@ -1318,12 +1453,13 @@ export default function ResourceForkParser() {
 
                   <div className="w-px h-6 bg-gray-600 self-center" />
 
-                  {/* Export */}
+                  {/* Export & Pack */}
                   <Button
                     onClick={downloadJson}
                     size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    variant="outline"
                     disabled={!parsedResult?.success}
+                    className="border-gray-600"
                   >
                     <FileJson className="h-4 w-4 mr-1" />
                     Export JSON
@@ -1331,11 +1467,21 @@ export default function ResourceForkParser() {
                   <Button
                     onClick={downloadTypeScript}
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    variant="outline"
                     disabled={fourLetterCodes.length === 0}
+                    className="border-gray-600"
                   >
                     <Code className="h-4 w-4 mr-1" />
                     Export TypeScript
+                  </Button>
+                  <Button
+                    onClick={packToRsrc}
+                    size="sm"
+                    className={`${hasUnsavedChanges ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'} text-white`}
+                    disabled={!parsedResult?.success || isProcessing}
+                  >
+                    <PackageOpen className="h-4 w-4 mr-1" />
+                    Pack to RSRC
                   </Button>
                 </div>
 
@@ -1383,7 +1529,7 @@ export default function ResourceForkParser() {
         </Card>
 
         {/* Error Display */}
-        {parseError && (
+        {parseError.length > 0 ? (
           <Card className="bg-red-900 border-red-700">
             <CardContent className="p-6">
               <div className="flex items-center gap-2 text-red-100">
@@ -1393,7 +1539,7 @@ export default function ResourceForkParser() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* Processing Indicator */}
         {isProcessing && (
@@ -1407,8 +1553,8 @@ export default function ResourceForkParser() {
           </Card>
         )}
 
-        {/* Four-Letter Code Specifications */}
-        {fourLetterCodes.length > 0 && (
+        {/* Four-Letter Code Specifications - show when in specs view mode */}
+        {viewMode === "specs" && fourLetterCodes.length > 0 && (
           <Card className="bg-gray-800 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white">
@@ -1435,6 +1581,15 @@ export default function ResourceForkParser() {
               ))}
             </CardContent>
           </Card>
+        )}
+
+        {/* Data Browser - show when in data view mode */}
+        {viewMode === "data" && parsedResult?.success && browserData && (
+          <DataBrowser 
+            data={browserData}
+            onDataChange={handleDataChange}
+            readOnly={false}
+          />
         )}
       </div>
     </div>
