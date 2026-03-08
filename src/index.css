@@ -2,7 +2,7 @@
 
 @layer base {
   :root {
-    --background: 24 24 27;
+    --background: 17 24 39;
     --foreground: 244 244 245;
     --card: 39 39 42;
     --card-foreground: 244 244 245;
@@ -26,5 +26,25 @@
 }
 
 @layer base {
-
+  /* Ensure consistent background color everywhere including overscroll */
+  html {
+    height: 100%;
+    min-height: 100%;
+    background-color: rgb(var(--background)) !important;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+  
+  body {
+    min-height: 100vh;
+    height: 100%;
+    background-color: rgb(var(--background)) !important;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+  
+  #root {
+    min-height: 100vh;
+    background-color: rgb(var(--background));
+  }
 }

@@ -30,6 +30,11 @@ import {
   X,
   AlertTriangle,
   Code,
+  FileJson,
+  Edit3,
+  Package,
+  PackageOpen,
+  Database,
 } from "lucide-react";
 import { useToast } from "../lib/toast";
 
@@ -42,17 +47,23 @@ import type {
   StructDataType
 } from "./resource-fork-parser/types";
 import FourLetterCodeSpecification from "./resource-fork-parser/FourLetterCodeSpecification";
-import { generateTypeScriptInterfaces } from "./resource-fork-parser/TypeScriptGenerator";
+import { generateTypeScriptInterfacesFromSpecs } from "./resource-fork-parser/TypeScriptGenerator";
+import DataBrowser from "./resource-fork-parser/DataBrowser";
+
+// Regex to remove numbered prefixes from Otto spec lines (e.g., "1.Hedr:" -> "Hedr:")
+const OTTO_SPEC_NUMBER_PREFIX_REGEX = /^\d+\./;
 
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [
   { value: "L", label: "L - Unsigned Long (4 bytes)" },
   { value: "l", label: "l - Signed Long (4 bytes)" },
   { value: "i", label: "i - Signed Int (4 bytes)" },
+  { value: "I", label: "I - Unsigned Int (4 bytes)" },
   { value: "h", label: "h - Signed Short (2 bytes)" },
   { value: "H", label: "H - Unsigned Short (2 bytes)" },
   { value: "f", label: "f - Float (4 bytes)" },
   { value: "B", label: "B - Unsigned Byte (1 byte)" },
   { value: "b", label: "b - Signed Byte (1 byte)" },
+  { value: "?", label: "? - Boolean (1 byte)" },
   { value: "x", label: "x - Padding Byte (1 byte)" },
   { value: "s", label: "s - String" },
   { value: "p", label: "p - Pascal String" },
@@ -68,6 +79,8 @@ export default function ResourceForkParser() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [saveLoadOpen, setSaveLoadOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"specs" | "data">("specs");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const specFileInputRef = useRef<HTMLInputElement>(null);
@@ -151,125 +164,134 @@ export default function ResourceForkParser() {
     [],
   );
 
-  // Helper function to parse spec strings with proper handling of spaces, backticks, and special characters
-  const parseSpecString = useCallback((specStr: string, nameTokens: string[], isArray: boolean): DataTypeField[] => {
+  // Helper function to parse spec strings character-by-character with proper handling of all patterns
+  // According to Python struct: ? = boolean (1 byte), x = padding (no field name)
+  const parseSpecString = useCallback((specStr: string, nameTokens: string[]): DataTypeField[] => {
     const dataTypes: DataTypeField[] = [];
-    
-    // Tokenize: split by spaces
-    const tokens: string[] = [];
-    let currentToken = "";
-    let i = 0;
-    
-    while (i < specStr.length) {
-      const char = specStr[i];
-      
-      if (char === ' ') {
-        if (currentToken) {
-          tokens.push(currentToken);
-          currentToken = "";
-        }
-        i++;
-      } else {
-        currentToken += char;
-        i++;
-      }
-    }
-    if (currentToken) tokens.push(currentToken);
-    
-    // Process tokens
-    let tokenIndex = 0;
+    let currentIndex = 0;
     let fieldIndex = 1;
     let nameIndex = 0;
-    
-    while (tokenIndex < tokens.length) {
-      const token = tokens[tokenIndex];
-      
-      // Regular token: 200f, x, 2x, x?, H, etc.
-      const typeMatch = token.match(/^(\d+)?([A-Za-z])(\?)?$/);
-      if (typeMatch) {
-        const count = typeMatch[1] ? parseInt(typeMatch[1]) : 1;
-        const type = typeMatch[2] as StructDataType;
-        const isOptional = typeMatch[3] === '?';
-        
-        // Check if the current name token has a backtick array pattern
+
+    while (currentIndex < specStr.length) {
+      // Skip spaces
+      if (specStr[currentIndex] === ' ') {
+        currentIndex++;
+        continue;
+      }
+
+      // Check for count+type pattern (e.g., "5i", "40x", "422B", "200f")
+      const countTypeMatch = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z?])/);
+      if (countTypeMatch) {
+        const count = parseInt(countTypeMatch[1]);
+        const type = countTypeMatch[2] as StructDataType;
+        currentIndex += countTypeMatch[0].length;
+
+        if (type === 'x') {
+          // Padding bytes - no name (description should be empty)
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: 'x',
+            count: count,
+            description: '',
+            isPadding: true,
+          });
+          fieldIndex++;
+          continue;
+        }
+
+        // Check if the current name is an array pattern like x`y[100]
         const currentName = nameTokens[nameIndex];
-        const backtickMatch = currentName?.match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]$/);
+        const arrayPatternMatch = currentName ? currentName.match(/^([a-zA-Z_]+(?:`[a-zA-Z_]+)*)\[(\d+)\]$/) : null;
         
-        if (backtickMatch && (isArray && count > 10)) {
-          // This is an array field pattern like x`y[100]
-          const fieldNames = backtickMatch[1].split('`');
-          const arraySize = parseInt(backtickMatch[2]);
-          
-          // The current token (e.g., "200f") defines the types for this array
-          const arrayFields: Array<{ name: string; type: StructDataType }> = fieldNames.map(name => ({
-            name: name.trim(),
-            type,
-          }));
+        if (arrayPatternMatch) {
+          // This is an array field like x`y[100]
+          const fieldNames = arrayPatternMatch[1].split('`');
+          const arraySize = parseInt(arrayPatternMatch[2]);
           
           dataTypes.push({
             id: fieldIndex.toString(),
-            type,
-            count: 1,
+            type: type,
+            count: count,
             description: currentName,
             isArrayField: true,
-            arraySize,
-            arrayFields,
+            arraySize: arraySize,
+            arrayFields: fieldNames.map(name => ({ name: name.trim(), type: type })),
           });
           
           nameIndex++;
           fieldIndex++;
-          tokenIndex++;
           continue;
         }
         
-        // Handle padding/string types
-        if (type === "s" || type === "p" || type === "x") {
-          const desc = type === "x" 
-            ? (isOptional ? "padding?" : "")
-            : (nameTokens[nameIndex] || `field_${fieldIndex}`);
-          
-          if (type !== "x" || !isOptional) {
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type,
-              count,
-              description: desc,
-            });
-            fieldIndex++;
+        // For regular types with count, check if we have enough names
+        const remainingNames = nameTokens.length - nameIndex;
+        
+        if (remainingNames >= count) {
+          // We have separate names for each - store as expanded group
+          const groupNames: string[] = [];
+          for (let j = 0; j < count; j++) {
+            groupNames.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
           }
           
-          if (type !== "x") nameIndex++;
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: type,
+            count: count,
+            description: groupNames.join(','),
+            isExpandedGroup: true,
+          });
+          
+          nameIndex += count;
+          fieldIndex++;
         } else {
-          // Regular data type
-          if (isArray && count > 10) {
-            // Large array - create single field
-            dataTypes.push({
-              id: fieldIndex.toString(),
-              type,
-              count,
-              description: nameTokens[nameIndex] || `${type.toLowerCase()}_array`,
-            });
-            nameIndex++;
-            fieldIndex++;
-          } else {
-            // Small count - create individual fields
-            for (let j = 0; j < count; j++) {
-              dataTypes.push({
-                id: fieldIndex.toString(),
-                type,
-                count: 1,
-                description: nameTokens[nameIndex] || `field_${fieldIndex}`,
-              });
-              nameIndex++;
-              fieldIndex++;
-            }
-          }
+          // Keep as single field with count
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: type,
+            count: count,
+            description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+          });
+          nameIndex++;
+          fieldIndex++;
         }
+        continue;
       }
-      
-      tokenIndex++;
+
+      // Single character type (e.g., "L", "H", "f", "h", "I", "?", "x")
+      const singleTypeMatch = specStr.slice(currentIndex).match(/^([A-Za-z?])/);
+      if (singleTypeMatch) {
+        const type = singleTypeMatch[1] as StructDataType;
+        currentIndex += singleTypeMatch[0].length;
+
+        if (type === 'x') {
+          // Single padding byte - no name (description should be empty)
+          dataTypes.push({
+            id: fieldIndex.toString(),
+            type: 'x',
+            count: 1,
+            description: '',
+            isPadding: true,
+          });
+          fieldIndex++;
+          continue;
+        }
+
+        // Regular type (including ? for boolean) gets a name
+        dataTypes.push({
+          id: fieldIndex.toString(),
+          type: type,
+          count: 1,
+          description: nameTokens[nameIndex] || `field_${fieldIndex}`,
+        });
+        nameIndex++;
+        fieldIndex++;
+        continue;
+      }
+
+      // Unknown character, skip
+      currentIndex++;
     }
-    
+
     return dataTypes.length > 0 ? dataTypes : [{
       id: "1",
       type: "i",
@@ -281,18 +303,21 @@ export default function ResourceForkParser() {
   const generateStructSpec = useCallback((spec: FourLetterCodeSpec): string => {
     let result = "";
     for (const dataType of spec.dataTypes) {
-      if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
-        // Handle array field like x`y[100] with individual types for each field
-        const fieldSpecs = dataType.arrayFields
-          .map((field) => field.type)
-          .join(" ");
-        const fieldNames = dataType.arrayFields
-          .map((field) => field.name)
-          .join("`");
-        result += `${fieldSpecs} ${fieldNames}[${dataType.arraySize}]`;
+      if (dataType.isPadding) {
+        // Padding: x, 2x, 40x
+        if (dataType.count > 1) {
+          result += `${dataType.count}x`;
+        } else {
+          result += "x";
+        }
+      } else if (dataType.isArrayField && dataType.arraySize && dataType.arrayFields) {
+        // Array field like x`y[100] - output the count (total values)
+        result += `${dataType.count}${dataType.type}`;
       } else if (dataType.count > 1) {
+        // Regular field with count > 1
         result += `${dataType.count}${dataType.type}`;
       } else {
+        // Single field (including boolean ? type)
         result += dataType.type;
       }
     }
@@ -304,19 +329,19 @@ export default function ResourceForkParser() {
 
   // Download TypeScript interfaces
   const downloadTypeScript = useCallback(() => {
-    if (!parsedResult?.data) {
-      error("No parsed data available for TypeScript generation");
+    if (fourLetterCodes.length === 0) {
+      error("No specifications available for TypeScript generation");
       return;
     }
 
     try {
-      const tsContent = generateTypeScriptInterfaces(parsedResult.data);
+      const tsContent = generateTypeScriptInterfacesFromSpecs(fourLetterCodes);
       const blob = new Blob([tsContent], { type: "text/typescript" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${
-        parsedResult.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"
+        parsedResult?.filename?.replace(/\.[^/.]+$/, "") || "resource-fork"
       }-types.ts`;
       document.body.appendChild(a);
       a.click();
@@ -335,7 +360,7 @@ export default function ResourceForkParser() {
         description: "Failed to generate TypeScript interfaces",
       });
     }
-  }, [parsedResult, success, error]);
+  }, [fourLetterCodes, parsedResult, success, error]);
 
   const parseWithSpecs = useCallback(
     async (data: Uint8Array, specs: FourLetterCodeSpec[]): Promise<Result<{ result: unknown; updatedSpecs: FourLetterCodeSpec[] }, string>> => {
@@ -344,7 +369,7 @@ export default function ResourceForkParser() {
         // Use raw Otto specification if available
         if (spec.rawOttoSpec) {
           // Return the raw specification directly, handling numbered prefixes
-          return spec.rawOttoSpec.replace(/^\d+\./, '');
+          return spec.rawOttoSpec.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, '');
         }
         
         const specStr = generateStructSpec(spec);
@@ -549,11 +574,8 @@ export default function ResourceForkParser() {
           ...existing,
           ...updates,
         } as DataTypeField;
-        if (
-          !(merged.type === "s" || merged.type === "p" || merged.type === "x")
-        ) {
-          merged.count = 1;
-        } else if (!merged.count || merged.count < 1) {
+        // Ensure count is at least 1
+        if (!merged.count || merged.count < 1) {
           merged.count = 1;
         }
 
@@ -761,7 +783,7 @@ export default function ResourceForkParser() {
 
         ottoSpecifications = lines.map((line) => {
           // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
-          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const cleanLine = line.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, ''); // Remove number prefix
           const parts = cleanLine.split(":");
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
@@ -777,7 +799,7 @@ export default function ResourceForkParser() {
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
           // Use the helper function to parse the spec string
-          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
+          const dataTypes = parseSpecString(specStr, nameTokens);
 
           return {
             fourCC,
@@ -858,6 +880,86 @@ export default function ResourceForkParser() {
       setIsProcessing(false);
     }
   }, [extractFourLetterCodes, parseSpecString, parseWithSpecs]);
+
+  // Load EarthFarm sample file without struct specs - for users to define their own
+  const loadEarthFarmSampleNoSpecs = useCallback(async () => {
+    setParseError("");
+    setIsProcessing(true);
+
+    try {
+      // Try fetching with the correct base path for the current environment
+      const basePath = import.meta.env.DEV ? '' : '/mac-online-resource-fork-parser';
+      
+      const response = await fetch(`${basePath}/test-files/EarthFarm.ter.rsrc`);
+      if (!response.ok) {
+        throw new Error("Failed to load EarthFarm sample file");
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const file = new File([data], "EarthFarm.ter.rsrc");
+
+      // Extract four-letter codes from the file WITHOUT loading Otto specs
+      const extractedResult = await extractFourLetterCodes(file);
+      
+      if (isErr(extractedResult)) {
+        setParseError(extractedResult.error);
+        setParsedResult({
+          success: false,
+          error: extractedResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const extractedSpecs = extractedResult.value;
+
+      // Parse with default (undefined) specs
+      const parseResult = await parseWithSpecs(data, extractedSpecs);
+
+      if (isErr(parseResult)) {
+        setParseError(parseResult.error);
+        setParsedResult({
+          success: false,
+          error: parseResult.error,
+          filename: "EarthFarm.ter.rsrc",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const { result, updatedSpecs } = parseResult.value;
+      setFourLetterCodes(updatedSpecs);
+      setCurrentFile(file);
+
+      if (result) {
+        setParsedResult({
+          success: true,
+          data: result,
+          filename: "EarthFarm.ter.rsrc",
+        });
+      }
+      
+      info({
+        title: "Sample Loaded",
+        description: "EarthFarm sample loaded without struct specs. Define specs for each four-letter code to properly parse the data.",
+      });
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to load EarthFarm sample";
+      setParseError(errorMessage);
+      setParsedResult({
+        success: false,
+        error: errorMessage,
+        filename: "EarthFarm.ter.rsrc",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [extractFourLetterCodes, parseWithSpecs, info]);
 
   // Handle JSON upload
   const handleJsonUpload = useCallback(
@@ -956,7 +1058,9 @@ export default function ResourceForkParser() {
       const specs = fourLetterCodes
         .map((spec) => {
           const structSpec = generateStructSpec(spec);
+          // Filter out regular padding from descriptions
           const description = spec.dataTypes
+            .filter((dt) => !dt.isPadding)
             .map((dt) => dt.description)
             .join(",");
           return `${spec.fourCC}:${structSpec}:${description}`;
@@ -997,7 +1101,7 @@ export default function ResourceForkParser() {
 
         const loadedSpecs: FourLetterCodeSpec[] = lines.map((line) => {
           // Handle numbered format like "1.Hedr:L5i3f5i40x:version,numItems,..."
-          const cleanLine = line.replace(/^\d+\./, ''); // Remove number prefix
+          const cleanLine = line.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, ''); // Remove number prefix
           const parts = cleanLine.split(":");
           const fourCC = parts[0];
           const structSpec = parts[1] || "";
@@ -1012,7 +1116,7 @@ export default function ResourceForkParser() {
           const specStr = isArray ? rawSpec.slice(0, -1) : rawSpec;
 
           // Use the helper function to parse the spec string
-          const dataTypes = parseSpecString(specStr, nameTokens, isArray);
+          const dataTypes = parseSpecString(specStr, nameTokens);
 
           // Find existing spec to preserve rawData
           const existingSpec = fourLetterCodes.find(s => s.fourCC === fourCC);
@@ -1039,9 +1143,114 @@ export default function ResourceForkParser() {
     [fourLetterCodes, parseSpecString, reParseWithUpdatedSpecs],
   );
 
+  // Handle data change from DataBrowser
+  const handleDataChange = useCallback(
+    (fourCC: string, resourceId: string, newData: Record<string, unknown>) => {
+      if (!parsedResult?.data) return;
+      
+      const currentData = parsedResult.data as Record<string, Record<string, { obj?: Record<string, unknown> }>>;
+      const updatedData = { ...currentData };
+      
+      if (updatedData[fourCC] && updatedData[fourCC][resourceId]) {
+        updatedData[fourCC] = {
+          ...updatedData[fourCC],
+          [resourceId]: {
+            ...updatedData[fourCC][resourceId],
+            obj: newData
+          }
+        };
+      }
+      
+      setParsedResult({
+        ...parsedResult,
+        data: updatedData
+      });
+      setHasUnsavedChanges(true);
+      
+      info({
+        title: "Data Modified",
+        description: `Updated ${fourCC}/${resourceId}. Use "Pack to RSRC" to save changes.`,
+      });
+    },
+    [parsedResult, info]
+  );
+
+  // Pack edited data back to RSRC file
+  const packToRsrc = useCallback(async () => {
+    if (!parsedResult?.data) {
+      error("No parsed data available for packing");
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Create struct specs array for packing
+      const structSpecs = fourLetterCodes.map((spec: FourLetterCodeSpec) => {
+        if (spec.rawOttoSpec) {
+          return spec.rawOttoSpec.replace(OTTO_SPEC_NUMBER_PREFIX_REGEX, '');
+        }
+        
+        const specStr = generateStructSpec(spec);
+        const description = spec.dataTypes
+          .map((dt) => dt.description)
+          .join(",");
+        return `${spec.fourCC}:${specStr}:${description}`;
+      });
+
+      const rsrcResult = await loadBytesFromJsonAsync(parsedResult.data, structSpecs);
+      
+      if (isErr(rsrcResult as RsrcResult<Uint8Array, string>)) {
+        const errMsg = (rsrcResult as { error: string }).error;
+        error({
+          title: "Pack Failed",
+          description: errMsg,
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      // Download as .rsrc file
+      const rsrcData = (rsrcResult as { value: Uint8Array }).value;
+      const blob = new Blob([rsrcData], {
+        type: "application/octet-stream",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const originalName = currentFile?.name || parsedResult.filename || "resource";
+      const baseName = originalName.replace(/\.[^/.]+$/, "");
+      a.download = `${baseName}-edited.rsrc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setHasUnsavedChanges(false);
+      success({
+        title: "RSRC Packed",
+        description: "Resource fork file has been packed and downloaded",
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to pack data";
+      error({
+        title: "Pack Failed",
+        description: errorMessage,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [parsedResult, fourLetterCodes, generateStructSpec, currentFile, success, error]);
+
   // Function removed - now using StatusIcon component
 
   // Function removed - now using SampleDataDisplay component
+
+  // Check if data is loaded
+  const hasDataLoaded = currentFile !== null || parsedResult?.success;
+  
+  // Extract data for DataBrowser (avoiding unknown type in JSX)
+  const browserData = parsedResult?.data as Record<string, unknown> | undefined;
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
@@ -1052,185 +1261,278 @@ export default function ResourceForkParser() {
             Mac Resource Fork Parser
           </h1>
           <p className="text-gray-400 text-lg">
-            Upload a resource fork file to analyze and experiment with data
-            types
+            {hasDataLoaded 
+              ? `Editing: ${currentFile?.name || parsedResult?.filename || 'Resource Fork'}`
+              : "Upload a resource fork file to analyze and experiment with data types"
+            }
           </p>
-          <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
-            <div className="flex items-center gap-2 text-yellow-200">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="font-medium">Work In Progress</span>
+          {!hasDataLoaded && (
+            <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
+              <div className="flex items-center gap-2 text-yellow-200">
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-medium">Work In Progress</span>
+              </div>
+              <p className="text-yellow-100 text-sm mt-1">
+                This application is under active development. Features may be
+                incomplete, and parsing results should be verified. Use with
+                caution for production data.
+              </p>
             </div>
-            <p className="text-yellow-100 text-sm mt-1">
-              This application is under active development. Features may be
-              incomplete, and parsing results should be verified. Use with
-              caution for production data.
-            </p>
-          </div>
+          )}
         </div>
 
-        {/* File Operations & Specifications - Combined */}
+        {/* Main Control Panel */}
         <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <FileText className="h-5 w-5" />
-              File Operations & Specifications
-            </CardTitle>
-            <CardDescription className="text-gray-400">
-              Upload files to parse, manage specifications, or try the sample
-              file
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Upload Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Upload .rsrc file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Upload .rsrc File
-                </label>
-                <Input
-                  type="file"
-                  accept=".rsrc"
-                  onChange={handleFileUpload}
-                  ref={fileInputRef}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={isProcessing}
-                  size="lg"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Choose .rsrc File
-                </Button>
-              </div>
-
-              {/* Upload JSON file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Upload .json File
-                </label>
-                <Input
-                  type="file"
-                  accept=".json"
-                  onChange={handleJsonUpload}
-                  ref={jsonInputRef}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => jsonInputRef.current?.click()}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                  disabled={isProcessing || fourLetterCodes.length === 0}
-                  size="lg"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Convert from JSON
-                </Button>
-              </div>
-
-              {/* Sample file */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">
-                  Sample File
-                </label>
-                <Button
-                  onClick={loadEarthFarmSample}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                  disabled={isProcessing}
-                  size="lg"
-                >
-                  Load EarthFarm Sample
-                </Button>
-              </div>
-            </div>
-
-            {/* Specifications Management */}
-            <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
-              <CollapsibleTrigger asChild>
-                <div className="border-t border-gray-700 pt-6">
-                  <div className="flex items-center justify-between cursor-pointer hover:bg-gray-700 p-3 rounded transition-colors">
-                    <div className="flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      <span className="font-medium text-gray-200">
-                        Specification Management
-                      </span>
-                    </div>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        saveLoadOpen ? "rotate-180" : ""
-                      }`}
+          {!hasDataLoaded ? (
+            // Initial state - show upload options prominently
+            <>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Upload className="h-5 w-5" />
+                  Get Started
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Upload a resource fork file or load a sample to begin
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Primary upload options */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Upload .rsrc file */}
+                  <div className="space-y-3">
+                    <Input
+                      type="file"
+                      accept=".rsrc"
+                      onChange={handleFileUpload}
+                      ref={fileInputRef}
+                      className="hidden"
                     />
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full h-24 bg-green-600 hover:bg-green-700 text-white flex-col gap-2"
+                      disabled={isProcessing}
+                      size="lg"
+                    >
+                      <Upload className="h-8 w-8" />
+                      <span className="text-lg">Upload .rsrc File</span>
+                    </Button>
+                  </div>
+
+                  {/* Sample files */}
+                  <div className="space-y-3">
+                    <Button
+                      onClick={loadEarthFarmSample}
+                      className="w-full h-24 bg-orange-600 hover:bg-orange-700 text-white flex-col gap-2"
+                      disabled={isProcessing}
+                      size="lg"
+                    >
+                      <Package className="h-8 w-8" />
+                      <span className="text-lg">Load Sample (with Specs)</span>
+                    </Button>
                   </div>
                 </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="pt-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-300">
-                        Save Current Specifications
-                      </label>
-                      <Button
-                        onClick={saveSpecifications}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={fourLetterCodes.length === 0}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Save Specifications
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-300">
-                        Load Specifications from File
-                      </label>
+
+                {/* Secondary option - sample without specs */}
+                <div className="border-t border-gray-700 pt-4">
+                  <p className="text-sm text-gray-400 mb-3">
+                    Want to define your own struct specs? Load the sample without pre-configured specifications:
+                  </p>
+                  <Button
+                    onClick={loadEarthFarmSampleNoSpecs}
+                    variant="outline"
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
+                    disabled={isProcessing}
+                  >
+                    <Edit3 className="h-4 w-4 mr-2" />
+                    Load Sample (Define Your Own Specs)
+                  </Button>
+                </div>
+              </CardContent>
+            </>
+          ) : (
+            // Data loaded - show compact toolbar
+            <>
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <FileText className="h-5 w-5" />
+                    {currentFile?.name || parsedResult?.filename || 'Resource Fork'}
+                    {hasUnsavedChanges && (
+                      <span className="text-xs text-yellow-400 font-normal">(modified)</span>
+                    )}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCurrentFile(null);
+                      setParsedResult(null);
+                      setFourLetterCodes([]);
+                      setParseError("");
+                      setViewMode("specs");
+                      setHasUnsavedChanges(false);
+                    }}
+                    className="text-gray-400 hover:text-white border-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Close
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* View mode toggle */}
+                <div className="flex items-center gap-2 border-b border-gray-700 pb-3">
+                  <Button
+                    onClick={() => setViewMode("specs")}
+                    size="sm"
+                    variant={viewMode === "specs" ? "default" : "ghost"}
+                    className={viewMode === "specs" ? "bg-blue-600" : "text-gray-400"}
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    Struct Specs
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode("data")}
+                    size="sm"
+                    variant={viewMode === "data" ? "default" : "ghost"}
+                    className={viewMode === "data" ? "bg-blue-600" : "text-gray-400"}
+                    disabled={!parsedResult?.success}
+                  >
+                    <Database className="h-4 w-4 mr-1" />
+                    Browse Data
+                  </Button>
+                </div>
+
+                {/* Compact action bar */}
+                <div className="flex flex-wrap gap-3">
+                  {/* File operations */}
+                  <Input
+                    type="file"
+                    accept=".rsrc"
+                    onChange={handleFileUpload}
+                    ref={fileInputRef}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessing}
+                    className="border-gray-600"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    New File
+                  </Button>
+
+                  <div className="w-px h-6 bg-gray-600 self-center" />
+
+                  {/* Spec management */}
+                  <Input
+                    type="file"
+                    accept=".txt"
+                    onChange={handleSpecUpload}
+                    ref={specFileInputRef}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => specFileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600"
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    Load Specs
+                  </Button>
+                  <Button
+                    onClick={saveSpecifications}
+                    variant="outline"
+                    size="sm"
+                    disabled={fourLetterCodes.length === 0}
+                    className="border-gray-600"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Save Specs
+                  </Button>
+
+                  <div className="w-px h-6 bg-gray-600 self-center" />
+
+                  {/* Export & Pack */}
+                  <Button
+                    onClick={downloadJson}
+                    size="sm"
+                    variant="outline"
+                    disabled={!parsedResult?.success}
+                    className="border-gray-600"
+                  >
+                    <FileJson className="h-4 w-4 mr-1" />
+                    Export JSON
+                  </Button>
+                  <Button
+                    onClick={downloadTypeScript}
+                    size="sm"
+                    variant="outline"
+                    disabled={fourLetterCodes.length === 0}
+                    className="border-gray-600"
+                  >
+                    <Code className="h-4 w-4 mr-1" />
+                    Export TypeScript
+                  </Button>
+                  <Button
+                    onClick={packToRsrc}
+                    size="sm"
+                    className={`${hasUnsavedChanges ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'} text-white`}
+                    disabled={!parsedResult?.success || isProcessing}
+                  >
+                    <PackageOpen className="h-4 w-4 mr-1" />
+                    Pack to RSRC
+                  </Button>
+                </div>
+
+                {/* Convert JSON to RSRC - hidden in collapsible */}
+                <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-400 hover:text-white p-0 h-auto"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 mr-1 transition-transform ${
+                          saveLoadOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                      More Options
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="pt-4 flex gap-3">
                       <Input
                         type="file"
-                        accept=".txt"
-                        onChange={handleSpecUpload}
-                        ref={specFileInputRef}
+                        accept=".json"
+                        onChange={handleJsonUpload}
+                        ref={jsonInputRef}
                         className="hidden"
                       />
                       <Button
-                        onClick={() => specFileInputRef.current?.click()}
-                        className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+                        onClick={() => jsonInputRef.current?.click()}
+                        variant="outline"
+                        size="sm"
+                        disabled={isProcessing || fourLetterCodes.length === 0}
+                        className="border-gray-600"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Load Specifications
+                        <Upload className="h-4 w-4 mr-1" />
+                        Convert JSON to RSRC
                       </Button>
                     </div>
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Download Buttons - Prominent */}
-            {parsedResult?.success && (
-              <div className="pt-6 border-t border-gray-700 space-y-3">
-                <Button
-                  onClick={downloadJson}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg py-4"
-                  size="lg"
-                >
-                  <Download className="h-5 w-5 mr-2" />
-                  Download as JSON
-                </Button>
-                <Button
-                  onClick={downloadTypeScript}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Code className="h-5 w-5 mr-2" />
-                  Download TypeScript Interfaces
-                </Button>
-              </div>
-            )}
-          </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </>
+          )}
         </Card>
 
         {/* Error Display */}
-        {parseError && (
+        {parseError.length > 0 ? (
           <Card className="bg-red-900 border-red-700">
             <CardContent className="p-6">
               <div className="flex items-center gap-2 text-red-100">
@@ -1240,7 +1542,7 @@ export default function ResourceForkParser() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* Processing Indicator */}
         {isProcessing && (
@@ -1254,8 +1556,8 @@ export default function ResourceForkParser() {
           </Card>
         )}
 
-        {/* Four-Letter Code Specifications */}
-        {fourLetterCodes.length > 0 && (
+        {/* Four-Letter Code Specifications - show when in specs view mode */}
+        {viewMode === "specs" && fourLetterCodes.length > 0 && (
           <Card className="bg-gray-800 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white">
@@ -1282,6 +1584,15 @@ export default function ResourceForkParser() {
               ))}
             </CardContent>
           </Card>
+        )}
+
+        {/* Data Browser - show when in data view mode */}
+        {viewMode === "data" && parsedResult?.success && browserData && (
+          <DataBrowser 
+            data={browserData}
+            onDataChange={handleDataChange}
+            readOnly={false}
+          />
         )}
       </div>
     </div>
