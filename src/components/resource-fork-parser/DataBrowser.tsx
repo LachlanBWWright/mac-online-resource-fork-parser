@@ -13,7 +13,8 @@ import {
   Database,
   Copy,
   Check,
-  Filter
+  Filter,
+  AlertCircle
 } from "lucide-react";
 
 interface DataBrowserProps {
@@ -34,21 +35,121 @@ interface ResourceEntry {
 interface EditState {
   fourCC: string;
   resourceId: string;
-  field: string;
+  fieldPath: string; // dot-notated path for nested fields e.g. "field" or "tiles[0].x"
   originalValue: unknown;
+  originalType: string; // explicit type tag: "integer", "float", "boolean", "string", "object", "array"
 }
 
 // Constants for validation and display
 const FOUR_LETTER_CODE_REGEX = /^[A-Za-z0-9]{4}$/;
-const STRING_DISPLAY_MAX_LENGTH = 100;
-const RAW_DATA_DISPLAY_MAX_LENGTH = 200;
+const STRING_DISPLAY_MAX_LENGTH = 200;
+
+/** Format hex data as space-separated byte pairs: "FF A3 B2 00" */
+function formatHexPairs(hexStr: string): string {
+  const clean = hexStr.replace(/\s/g, "");
+  return clean.match(/.{1,2}/g)?.join(" ") ?? hexStr;
+}
+
+/** Determine original type tag from a value */
+function getTypeTag(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "integer" : "float";
+  }
+  if (typeof value === "string") return "string";
+  if (Array.isArray(value)) return "array";
+  if (typeof value === "object") return "object";
+  return "unknown";
+}
+
+/** Validate and parse a user-entered string given a type tag */
+function parseEditedValue(raw: string, typeTag: string): { value: unknown; error?: string } {
+  switch (typeTag) {
+    case "integer": {
+      const trimmed = raw.trim();
+      if (!/^-?\d+$/.test(trimmed)) return { value: null, error: "Must be a whole number (no decimals)" };
+      const n = parseInt(trimmed, 10);
+      if (isNaN(n)) return { value: null, error: "Invalid integer" };
+      return { value: n };
+    }
+    case "float": {
+      const trimmed = raw.trim();
+      const n = parseFloat(trimmed);
+      if (isNaN(n)) return { value: null, error: "Must be a valid number" };
+      return { value: n };
+    }
+    case "boolean": {
+      const lower = raw.trim().toLowerCase();
+      if (lower === "true" || lower === "1") return { value: true };
+      if (lower === "false" || lower === "0") return { value: false };
+      return { value: null, error: 'Must be "true" or "false"' };
+    }
+    case "string":
+      return { value: raw };
+    case "object":
+    case "array": {
+      try {
+        return { value: JSON.parse(raw) };
+      } catch {
+        return { value: null, error: "Invalid JSON" };
+      }
+    }
+    default:
+      return { value: raw };
+  }
+}
+
+/** Deep-set a value at a dot-notated path supporting array indices e.g. "tiles[0].x" */
+function deepSet(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+  // Tokenize: split by dots then by [n] array index notation
+  const tokens: Array<string | number> = [];
+  for (const segment of path.split(".")) {
+    const arrMatch = segment.match(/^(.+?)\[(\d+)\]$/);
+    if (arrMatch) {
+      if (arrMatch[1]) tokens.push(arrMatch[1]);
+      tokens.push(parseInt(arrMatch[2], 10));
+    } else {
+      tokens.push(segment);
+    }
+  }
+
+  function setAt(node: unknown, depth: number): unknown {
+    const key = tokens[depth];
+    if (depth === tokens.length - 1) {
+      if (Array.isArray(node) && typeof key === "number") {
+        const arr = [...(node as unknown[])];
+        arr[key] = value;
+        return arr;
+      }
+      if (typeof node === "object" && node !== null && typeof key === "string") {
+        return { ...(node as Record<string, unknown>), [key]: value };
+      }
+      return node;
+    }
+    if (Array.isArray(node) && typeof key === "number") {
+      const arr = [...(node as unknown[])];
+      arr[key] = setAt(arr[key], depth + 1);
+      return arr;
+    }
+    if (typeof node === "object" && node !== null && typeof key === "string") {
+      const rec = node as Record<string, unknown>;
+      return { ...rec, [key]: setAt(rec[key], depth + 1) };
+    }
+    return node;
+  }
+
+  return setAt(obj, 0) as Record<string, unknown>;
+}
 
 export default function DataBrowser({ data, onDataChange, readOnly = false }: DataBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editValue, setEditValue] = useState<string>("");
+  const [editError, setEditError] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [filterFourCC, setFilterFourCC] = useState<string>("");
 
@@ -103,11 +204,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const toggleCode = useCallback((fourCC: string) => {
     setExpandedCodes(prev => {
       const next = new Set(prev);
-      if (next.has(fourCC)) {
-        next.delete(fourCC);
-      } else {
-        next.add(fourCC);
-      }
+      if (next.has(fourCC)) { next.delete(fourCC); } else { next.add(fourCC); }
       return next;
     });
   }, []);
@@ -115,18 +212,21 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const toggleResource = useCallback((key: string) => {
     setExpandedResources(prev => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
+      if (next.has(key)) { next.delete(key); } else { next.add(key); }
+      return next;
+    });
+  }, []);
+
+  const toggleNode = useCallback((key: string) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) { next.delete(key); } else { next.add(key); }
       return next;
     });
   }, []);
 
   const expandAll = useCallback(() => {
-    const allCodes = new Set(filteredData.map(item => item.fourCC));
-    setExpandedCodes(allCodes);
+    setExpandedCodes(new Set(filteredData.map(item => item.fourCC)));
   }, [filteredData]);
 
   const collapseAll = useCallback(() => {
@@ -134,52 +234,43 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     setExpandedResources(new Set());
   }, []);
 
-  const startEdit = useCallback((fourCC: string, resourceId: string, field: string, value: unknown) => {
-    setEditState({ fourCC, resourceId, field, originalValue: value });
-    setEditValue(typeof value === "object" ? JSON.stringify(value, null, 2) : String(value));
+  const startEdit = useCallback((fourCC: string, resourceId: string, fieldPath: string, value: unknown) => {
+    const typeTag = getTypeTag(value);
+    setEditState({ fourCC, resourceId, fieldPath, originalValue: value, originalType: typeTag });
+    setEditError("");
+    if (typeTag === "object" || typeTag === "array") {
+      setEditValue(JSON.stringify(value, null, 2));
+    } else {
+      setEditValue(String(value));
+    }
   }, []);
 
   const cancelEdit = useCallback(() => {
     setEditState(null);
     setEditValue("");
+    setEditError("");
   }, []);
 
   const saveEdit = useCallback(() => {
     if (!editState || !onDataChange) return;
 
-    try {
-      // Parse the value based on its original type
-      let parsedValue: unknown;
-      const originalType = typeof editState.originalValue;
-
-      if (originalType === "number") {
-        parsedValue = parseFloat(editValue);
-        if (isNaN(parsedValue as number)) {
-          throw new Error("Invalid number");
-        }
-      } else if (originalType === "boolean") {
-        parsedValue = editValue.toLowerCase() === "true";
-      } else if (originalType === "object" && editState.originalValue !== null) {
-        parsedValue = JSON.parse(editValue);
-      } else {
-        parsedValue = editValue;
-      }
-
-      // Get the current resource data and update it
-      const currentResources = data[editState.fourCC] as Record<string, ResourceEntry>;
-      const currentResource = currentResources?.[editState.resourceId];
-      
-      if (currentResource?.obj) {
-        const newObj = { ...currentResource.obj, [editState.field]: parsedValue };
-        onDataChange(editState.fourCC, editState.resourceId, newObj);
-      }
-
-      setEditState(null);
-      setEditValue("");
-    } catch (err) {
-      console.error("Failed to parse value:", err);
-      // Keep edit state open so user can fix
+    const { value: parsedValue, error } = parseEditedValue(editValue, editState.originalType);
+    if (error) {
+      setEditError(error);
+      return;
     }
+
+    const currentResources = data[editState.fourCC] as Record<string, ResourceEntry>;
+    const currentResource = currentResources?.[editState.resourceId];
+    
+    if (currentResource?.obj) {
+      const newObj = deepSet(currentResource.obj, editState.fieldPath, parsedValue);
+      onDataChange(editState.fourCC, editState.resourceId, newObj);
+    }
+
+    setEditState(null);
+    setEditValue("");
+    setEditError("");
   }, [editState, editValue, onDataChange, data]);
 
   const copyToClipboard = useCallback(async (text: string, fieldKey: string) => {
@@ -196,43 +287,55 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     value: unknown, 
     fourCC: string, 
     resourceId: string, 
-    field: string,
+    fieldPath: string,
     depth: number = 0
   ): React.ReactNode => {
-    const fieldKey = `${fourCC}-${resourceId}-${field}`;
+    const fieldKey = `${fourCC}-${resourceId}-${fieldPath}`;
     const isEditing = editState?.fourCC === fourCC && 
                       editState?.resourceId === resourceId && 
-                      editState?.field === field;
+                      editState?.fieldPath === fieldPath;
 
     if (isEditing) {
-      const isMultiline = typeof value === "object" && value !== null;
+      const isMultiline = editState.originalType === "object" || editState.originalType === "array";
       return (
-        <div className="flex items-start gap-2">
-          {isMultiline ? (
-            <textarea
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white font-mono min-h-[100px] resize-y"
-              autoFocus
-            />
-          ) : (
-            <Input
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="flex-1 h-8 text-sm font-mono"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveEdit();
-                if (e.key === "Escape") cancelEdit();
-              }}
-            />
+        <div className="flex flex-col gap-1 w-full">
+          <div className="flex items-start gap-2">
+            {isMultiline ? (
+              <textarea
+                value={editValue}
+                onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
+                className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white font-mono min-h-[100px] resize-y"
+                autoFocus
+              />
+            ) : (
+              <Input
+                value={editValue}
+                onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
+                className={`flex-1 h-8 text-sm font-mono ${editError ? "border-red-500" : ""}`}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveEdit();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+              />
+            )}
+            <Button onClick={saveEdit} size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700">
+              <Save className="h-3 w-3" />
+            </Button>
+            <Button onClick={cancelEdit} size="sm" variant="ghost" className="h-8 px-2">
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          {editError && (
+            <div className="flex items-center gap-1 text-red-400 text-xs">
+              <AlertCircle className="h-3 w-3" />
+              {editError}
+            </div>
           )}
-          <Button onClick={saveEdit} size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700">
-            <Save className="h-3 w-3" />
-          </Button>
-          <Button onClick={cancelEdit} size="sm" variant="ghost" className="h-8 px-2">
-            <X className="h-3 w-3" />
-          </Button>
+          <div className="text-gray-500 text-xs">
+            Type: {editState.originalType}
+            {editState.originalType === "integer" && " (whole number only)"}
+          </div>
         </div>
       );
     }
@@ -251,9 +354,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
           <Badge variant={value ? "default" : "secondary"} className="text-xs">
             {value ? "true" : "false"}
           </Badge>
-          {!readOnly && depth === 0 && (
+          {!readOnly && (
             <Button 
-              onClick={() => startEdit(fourCC, resourceId, field, value)}
+              onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
               className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -277,9 +380,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
           >
             {copiedField === fieldKey ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
-          {!readOnly && depth === 0 && (
+          {!readOnly && (
             <Button 
-              onClick={() => startEdit(fourCC, resourceId, field, value)}
+              onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
               className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -292,10 +395,16 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     }
 
     if (typeof value === "string") {
-      const displayValue = value.length > STRING_DISPLAY_MAX_LENGTH ? value.substring(0, STRING_DISPLAY_MAX_LENGTH) + "..." : value;
+      // Check if this looks like hex data (long hex string with even length)
+      const isHexData = /^[0-9a-fA-F]{4,}$/.test(value) && value.length % 2 === 0;
+      const truncated = value.length > STRING_DISPLAY_MAX_LENGTH;
+      const displayRaw = truncated ? value.substring(0, STRING_DISPLAY_MAX_LENGTH) : value;
+      const displayValue = isHexData ? formatHexPairs(displayRaw) + (truncated ? "…" : "") : (truncated ? displayRaw + "…" : displayRaw);
       return (
         <div className="flex items-center gap-2 group">
-          <span className="text-green-400 font-mono text-sm break-all">&quot;{displayValue}&quot;</span>
+          <span className={`${isHexData ? "text-orange-300" : "text-green-400"} font-mono text-sm break-all`}>
+            {isHexData ? displayValue : `"${displayValue}"`}
+          </span>
           <Button
             onClick={() => copyToClipboard(value, fieldKey)}
             size="sm"
@@ -304,9 +413,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
           >
             {copiedField === fieldKey ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
-          {!readOnly && depth === 0 && (
+          {!readOnly && (
             <Button 
-              onClick={() => startEdit(fourCC, resourceId, field, value)}
+              onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
               className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
@@ -323,8 +432,8 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
         return <span className="text-gray-500 italic">[]</span>;
       }
       
+      // Short arrays of primitives: show inline
       if (value.length <= 5 && value.every(v => typeof v !== "object")) {
-        // Show short arrays inline
         return (
           <span className="text-yellow-400 font-mono text-sm">
             [{value.map((v, i) => (
@@ -337,51 +446,70 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
         );
       }
 
+      const nodeKey = `${fieldKey}--arr`;
+      const isExpanded = expandedNodes.has(nodeKey);
+
       return (
-        <details className="group">
-          <summary className="cursor-pointer text-yellow-400 font-mono text-sm">
+        <div className="w-full">
+          <button
+            onClick={() => toggleNode(nodeKey)}
+            className="flex items-center gap-1 text-yellow-400 font-mono text-sm hover:text-yellow-300 transition-colors"
+          >
+            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             Array ({value.length} items)
-          </summary>
-          <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
-            {value.slice(0, 20).map((item, index) => (
-              <div key={index} className="flex items-start gap-2">
-                <span className="text-gray-500 text-xs w-6">[{index}]</span>
-                {renderValue(item, fourCC, resourceId, `${field}[${index}]`, depth + 1)}
-              </div>
-            ))}
-            {value.length > 20 && (
-              <span className="text-gray-500 text-xs italic">...and {value.length - 20} more items</span>
-            )}
-          </div>
-        </details>
+          </button>
+          {isExpanded && (
+            <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
+              {value.map((item, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <span className="text-gray-500 text-xs w-8 flex-shrink-0">[{index}]</span>
+                  <div className="flex-1 min-w-0">
+                    {renderValue(item, fourCC, resourceId, `${fieldPath}[${index}]`, depth + 1)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       );
     }
 
     if (typeof value === "object") {
-      const entries = Object.entries(value);
+      const entries = Object.entries(value as Record<string, unknown>);
       if (entries.length === 0) {
         return <span className="text-gray-500 italic">{"{}"}</span>;
       }
 
+      const nodeKey = `${fieldKey}--obj`;
+      const isExpanded = expandedNodes.has(nodeKey);
+
       return (
-        <details className="group" open={depth === 0}>
-          <summary className="cursor-pointer text-purple-400 font-mono text-sm">
+        <div className="w-full">
+          <button
+            onClick={() => toggleNode(nodeKey)}
+            className="flex items-center gap-1 text-purple-400 font-mono text-sm hover:text-purple-300 transition-colors"
+          >
+            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             Object ({entries.length} fields)
-          </summary>
-          <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
-            {entries.map(([key, val]) => (
-              <div key={key} className="flex items-start gap-2">
-                <span className="text-gray-400 text-sm font-medium min-w-fit">{key}:</span>
-                {renderValue(val, fourCC, resourceId, `${field}.${key}`, depth + 1)}
-              </div>
-            ))}
-          </div>
-        </details>
+          </button>
+          {isExpanded && (
+            <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
+              {entries.map(([key, val]) => (
+                <div key={key} className="flex items-start gap-2">
+                  <span className="text-gray-400 text-sm font-medium min-w-fit">{key}:</span>
+                  <div className="flex-1 min-w-0">
+                    {renderValue(val, fourCC, resourceId, `${fieldPath}.${key}`, depth + 1)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       );
     }
 
     return <span className="text-gray-400">{String(value)}</span>;
-  }, [editState, editValue, readOnly, startEdit, saveEdit, cancelEdit, copyToClipboard, copiedField]);
+  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes, toggleNode]);
 
   const totalResources = useMemo(() => {
     return filteredData.reduce((sum, item) => sum + item.resourceCount, 0);
@@ -447,8 +575,8 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
           </div>
         </div>
 
-        {/* Data tree */}
-        <div className="space-y-2 max-h-[600px] overflow-y-auto">
+        {/* Data tree - expands freely, no max height */}
+        <div className="space-y-2">
           {filteredData.map(({ fourCC, resources, resourceCount }) => (
             <div key={fourCC} className="border border-gray-700 rounded-lg overflow-hidden">
               {/* Four-letter code header */}
@@ -514,10 +642,10 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                               <div className="space-y-1">
                                 {Object.entries(resource.obj).map(([field, value]) => (
                                   <div key={field} className="flex items-start gap-2 py-1">
-                                    <span className="text-gray-400 text-sm font-medium min-w-[120px]">
+                                    <span className="text-gray-400 text-sm font-medium min-w-[120px] flex-shrink-0">
                                       {field}:
                                     </span>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                       {renderValue(value, fourCC, resourceId, field)}
                                     </div>
                                   </div>
@@ -527,11 +655,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
 
                             {resource.data && !resource.obj && (
                               <div>
-                                <span className="text-gray-400 text-xs">Raw Data:</span>
-                                <code className="block mt-1 text-xs text-gray-300 bg-gray-900 p-2 rounded break-all">
-                                  {resource.data.length > RAW_DATA_DISPLAY_MAX_LENGTH 
-                                    ? resource.data.substring(0, RAW_DATA_DISPLAY_MAX_LENGTH) + "..." 
-                                    : resource.data}
+                                <span className="text-gray-400 text-xs">Raw Data (hex pairs):</span>
+                                <code className="block mt-1 text-xs text-orange-300 bg-gray-900 p-2 rounded break-all font-mono">
+                                  {formatHexPairs(resource.data)}
                                 </code>
                               </div>
                             )}

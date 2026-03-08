@@ -61,21 +61,17 @@ function parseSpecString(specStr: string, nameTokens: string[]): DataTypeField[]
       const remainingNames = nameTokens.length - nameIndex;
       
       if (remainingNames >= count) {
-        const groupNames: string[] = [];
+        // Expand to individual fields, one per name (count=1 each)
         for (let j = 0; j < count; j++) {
-          groupNames.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
+          dataTypes.push({
+            id: (fieldIndex + j).toString(),
+            type: type,
+            count: 1,
+            description: nameTokens[nameIndex + j] || `field_${fieldIndex + j}`,
+          });
         }
-        
-        dataTypes.push({
-          id: fieldIndex.toString(),
-          type: type,
-          count: count,
-          description: groupNames.join(','),
-          isExpandedGroup: true,
-        });
-        
         nameIndex += count;
-        fieldIndex++;
+        fieldIndex += count;
       } else {
         dataTypes.push({
           id: fieldIndex.toString(),
@@ -186,7 +182,31 @@ function parseAndRoundtrip(specLine: string): string {
 
 describe('Spec Roundtrip', () => {
   // These specs match the otto-specs.txt file exactly (without numbered prefixes)
+  // These are the specs as they appear after parsing and regenerating (roundtrip-stable form).
+  // For specs like Hedr that have count+type patterns (e.g. 5i) with enough names, 
+  // they are expanded to individual fields, so the roundtripped form differs from the original.
   const ottomaticSpecs = [
+    // Hedr: 5i and 3f and 5i with enough names → expanded to individual i/f fields
+    // Roundtrip form: Liiiiifffiiiii40x
+    "Hedr:Liiiiifffiiiii40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints",
+    "alis:422s+:alias_data",
+    "Atrb:HBB+:flags,p0,p1",
+    "STgd:x?H+:isEmpty,superTileId",
+    "Layr:H+:TileAttributeIndex",
+    "YCrd:f+:height",
+    "ItCo:450i+:color_data",
+    "Itms:LLHBBBBH+:x,z,type,p0,p1,p2,p3,flags",
+    "Spln:h2x4xi4xh2x4xhhhh+:numNubs,numPoints,numItems,bbTop,bbLeft,bbBottom,bbRight",
+    "SpNb:ff+:x,z",
+    "SpPt:ff+:x,z",
+    "SpIt:fHBBBBH+:placement,type,p0,p1,p2,p3,flags",
+    "Fenc:HhLhhhh+:fenceType,numNubs,junkNubListPtr,bbTop,bbLeft,bbBottom,bbRight",
+    "FnNb:ii+:x,z",
+    "Liqd:HxxIihxxi200fffhhhh+:type,flags,height,numNubs,reserved,x`y[100],hotSpotX,hotSpotZ,bBoxTop,bBoxLeft,bBoxBottom,bBoxRight"
+  ];
+
+  // Original otto specs before the roundtrip normalization
+  const originalOttomaticSpecs = [
     "Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints",
     "alis:422s+:alias_data",
     "Atrb:HBB+:flags,p0,p1",
@@ -204,8 +224,22 @@ describe('Spec Roundtrip', () => {
     "Liqd:HxxIihxxi200fffhhhh+:type,flags,height,numNubs,reserved,x`y[100],hotSpotX,hotSpotZ,bBoxTop,bBoxLeft,bBoxBottom,bBoxRight"
   ];
 
-  it('all specs roundtrip correctly', () => {
+  it('all stable-form specs roundtrip exactly', () => {
     for (const spec of ottomaticSpecs) {
+      const result = parseAndRoundtrip(spec);
+      expect(result).toBe(spec);
+    }
+  });
+
+  it('original otto spec Hedr roundtrips to expanded individual-field form', () => {
+    const original = "Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints";
+    const expected = "Hedr:Liiiiifffiiiii40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints";
+    const result = parseAndRoundtrip(original);
+    expect(result).toBe(expected);
+  });
+
+  it('all non-Hedr original specs roundtrip exactly', () => {
+    for (const spec of originalOttomaticSpecs.filter(s => !s.startsWith('Hedr'))) {
       const result = parseAndRoundtrip(spec);
       expect(result).toBe(spec);
     }
@@ -213,13 +247,13 @@ describe('Spec Roundtrip', () => {
 
   ottomaticSpecs.forEach((spec) => {
     const fourCC = spec.split(':')[0];
-    it(`roundtrips ${fourCC} correctly`, () => {
+    it(`stable-form ${fourCC} roundtrips correctly`, () => {
       const result = parseAndRoundtrip(spec);
       expect(result).toBe(spec);
     });
   });
 
-  it('parses Hedr with correct field count', () => {
+  it('parses Hedr with correct field count - each named field is its own entry', () => {
     const specLine = "Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints";
     const parts = specLine.split(":");
     const structSpec = parts[1];
@@ -230,35 +264,63 @@ describe('Spec Roundtrip', () => {
     
     const dataTypes = parseSpecString(specStr, nameTokens);
     
-    // Should have: 1 (L) + 1 (5i group) + 1 (3f group) + 1 (5i group) + 1 (40x padding) = 5 fields
-    // But the names are: 14 (version + 5 ints + 3 floats + 5 ints)
-    expect(dataTypes.length).toBe(5);
+    // With the new behavior: 5i with 5 names → 5 individual fields (each count=1)
+    // Should have: 1 (L:version) + 5 (5×i) + 3 (3×f) + 5 (5×i) + 1 (40x padding) = 15 fields
+    expect(dataTypes.length).toBe(15);
     
     // First field: L with version
     expect(dataTypes[0].type).toBe('L');
     expect(dataTypes[0].count).toBe(1);
     expect(dataTypes[0].description).toBe('version');
     
-    // Second field: 5i with 5 names
+    // Fields 1-5: 5 individual i fields with separate names
     expect(dataTypes[1].type).toBe('i');
-    expect(dataTypes[1].count).toBe(5);
-    expect(dataTypes[1].description).toBe('numItems,mapWidth,mapHeight,numTilePages,numTiles');
-    expect(dataTypes[1].isExpandedGroup).toBe(true);
+    expect(dataTypes[1].count).toBe(1);
+    expect(dataTypes[1].description).toBe('numItems');
     
-    // Third field: 3f with 3 names
-    expect(dataTypes[2].type).toBe('f');
-    expect(dataTypes[2].count).toBe(3);
-    expect(dataTypes[2].description).toBe('tileSize,minY,maxY');
+    expect(dataTypes[2].type).toBe('i');
+    expect(dataTypes[2].count).toBe(1);
+    expect(dataTypes[2].description).toBe('mapWidth');
     
-    // Fourth field: 5i with 5 names
     expect(dataTypes[3].type).toBe('i');
-    expect(dataTypes[3].count).toBe(5);
-    expect(dataTypes[3].description).toBe('numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints');
+    expect(dataTypes[3].count).toBe(1);
+    expect(dataTypes[3].description).toBe('mapHeight');
     
-    // Fifth field: 40x padding
-    expect(dataTypes[4].type).toBe('x');
-    expect(dataTypes[4].count).toBe(40);
-    expect(dataTypes[4].isPadding).toBe(true);
+    expect(dataTypes[4].type).toBe('i');
+    expect(dataTypes[4].count).toBe(1);
+    expect(dataTypes[4].description).toBe('numTilePages');
+    
+    expect(dataTypes[5].type).toBe('i');
+    expect(dataTypes[5].count).toBe(1);
+    expect(dataTypes[5].description).toBe('numTiles');
+    
+    // Fields 6-8: 3 individual f fields
+    expect(dataTypes[6].type).toBe('f');
+    expect(dataTypes[6].count).toBe(1);
+    expect(dataTypes[6].description).toBe('tileSize');
+    
+    expect(dataTypes[7].type).toBe('f');
+    expect(dataTypes[7].count).toBe(1);
+    expect(dataTypes[7].description).toBe('minY');
+    
+    expect(dataTypes[8].type).toBe('f');
+    expect(dataTypes[8].count).toBe(1);
+    expect(dataTypes[8].description).toBe('maxY');
+    
+    // Fields 9-13: 5 individual i fields
+    expect(dataTypes[9].type).toBe('i');
+    expect(dataTypes[9].count).toBe(1);
+    expect(dataTypes[9].description).toBe('numSplines');
+    
+    // Last non-padding field
+    expect(dataTypes[13].type).toBe('i');
+    expect(dataTypes[13].count).toBe(1);
+    expect(dataTypes[13].description).toBe('numCheckpoints');
+    
+    // Last field: 40x padding
+    expect(dataTypes[14].type).toBe('x');
+    expect(dataTypes[14].count).toBe(40);
+    expect(dataTypes[14].isPadding).toBe(true);
   });
 
   it('parses ItCo with single field having count=450', () => {
@@ -310,8 +372,9 @@ describe('Spec Roundtrip', () => {
 
   // Multi-round-trip tests to ensure no data loss
   describe('Multi-Round-Trip Tests', () => {
-    const ottomaticSpecs = [
-      "Hedr:L5i3f5i40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints",
+    // Use the stable-form specs (after first-roundtrip normalization)
+    const stableSpecs = [
+      "Hedr:Liiiiifffiiiii40x:version,numItems,mapWidth,mapHeight,numTilePages,numTiles,tileSize,minY,maxY,numSplines,numFences,numUniqueSupertiles,numWaterPatches,numCheckpoints",
       "alis:422s+:alias_data",
       "Atrb:HBB+:flags,p0,p1",
       "STgd:x?H+:isEmpty,superTileId",
@@ -328,11 +391,10 @@ describe('Spec Roundtrip', () => {
       "Liqd:HxxIihxxi200fffhhhh+:type,flags,height,numNubs,reserved,x`y[100],hotSpotX,hotSpotZ,bBoxTop,bBoxLeft,bBoxBottom,bBoxRight"
     ];
 
-    it('specs are stable through 10 consecutive roundtrips', () => {
-      for (const originalSpec of ottomaticSpecs) {
+    it('stable specs are stable through 10 consecutive roundtrips', () => {
+      for (const originalSpec of stableSpecs) {
         let currentSpec = originalSpec;
         
-        // Run 10 consecutive roundtrips
         for (let i = 0; i < 10; i++) {
           const result = parseAndRoundtrip(currentSpec);
           expect(result).toBe(originalSpec);
@@ -342,7 +404,7 @@ describe('Spec Roundtrip', () => {
     });
 
     it('parsed data types are identical after multiple roundtrips', () => {
-      for (const originalSpec of ottomaticSpecs) {
+      for (const originalSpec of stableSpecs) {
         // Parse original spec
         const parts1 = originalSpec.split(":");
         const specStr1 = parts1[1].endsWith("+") ? parts1[1].slice(0, -1) : parts1[1];
@@ -363,37 +425,27 @@ describe('Spec Roundtrip', () => {
           expect(dataTypes2[i].count).toBe(dataTypes1[i].count);
           expect(dataTypes2[i].description).toBe(dataTypes1[i].description);
           expect(dataTypes2[i].isPadding).toBe(dataTypes1[i].isPadding);
-          expect(dataTypes2[i].isExpandedGroup).toBe(dataTypes1[i].isExpandedGroup);
           expect(dataTypes2[i].isArrayField).toBe(dataTypes1[i].isArrayField);
         }
       }
     });
 
-    it('all specs produce consistent output format after roundtrip', () => {
-      for (const originalSpec of ottomaticSpecs) {
+    it('all stable specs produce consistent output format after roundtrip', () => {
+      for (const originalSpec of stableSpecs) {
         const fourCC = originalSpec.split(':')[0];
         
-        // First roundtrip
         const round1 = parseAndRoundtrip(originalSpec);
-        
-        // Second roundtrip
         const round2 = parseAndRoundtrip(round1);
-        
-        // Third roundtrip
         const round3 = parseAndRoundtrip(round2);
         
-        // All roundtrips should produce identical output
         expect(round1).toBe(originalSpec);
         expect(round2).toBe(originalSpec);
         expect(round3).toBe(originalSpec);
         
-        // Log for debugging if fails
         if (round1 !== originalSpec || round2 !== originalSpec || round3 !== originalSpec) {
           console.error(`Roundtrip failed for ${fourCC}:`);
           console.error(`Original: ${originalSpec}`);
           console.error(`Round 1:  ${round1}`);
-          console.error(`Round 2:  ${round2}`);
-          console.error(`Round 3:  ${round3}`);
         }
       }
     });
