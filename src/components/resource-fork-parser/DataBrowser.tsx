@@ -83,7 +83,7 @@ function parseEditedValue(raw: string, typeTag: string): { value: unknown; error
       const lower = raw.trim().toLowerCase();
       if (lower === "true" || lower === "1") return { value: true };
       if (lower === "false" || lower === "0") return { value: false };
-      return { value: null, error: 'Must be "true" or "false"' };
+      return { value: null, error: 'Must be "true", "false", "1", or "0"' };
     }
     case "string":
       return { value: raw };
@@ -204,7 +204,11 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const toggleCode = useCallback((fourCC: string) => {
     setExpandedCodes(prev => {
       const next = new Set(prev);
-      if (next.has(fourCC)) { next.delete(fourCC); } else { next.add(fourCC); }
+      if (next.has(fourCC)) {
+        next.delete(fourCC);
+      } else {
+        next.add(fourCC);
+      }
       return next;
     });
   }, []);
@@ -212,7 +216,11 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const toggleResource = useCallback((key: string) => {
     setExpandedResources(prev => {
       const next = new Set(prev);
-      if (next.has(key)) { next.delete(key); } else { next.add(key); }
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   }, []);
@@ -220,7 +228,11 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const toggleNode = useCallback((key: string) => {
     setExpandedNodes(prev => {
       const next = new Set(prev);
-      if (next.has(key)) { next.delete(key); } else { next.add(key); }
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   }, []);
@@ -462,7 +474,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
             <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
               {value.map((item, index) => (
                 <div key={index} className="flex items-start gap-2">
-                  <span className="text-gray-500 text-xs w-8 flex-shrink-0">[{index}]</span>
+                  <span className="text-gray-500 text-xs min-w-[2rem] flex-shrink-0">[{index}]</span>
                   <div className="flex-1 min-w-0">
                     {renderValue(item, fourCC, resourceId, `${fieldPath}[${index}]`, depth + 1)}
                   </div>
