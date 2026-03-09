@@ -16,13 +16,8 @@ import {
 } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "./ui/collapsible";
-import {
-  ChevronDown,
   Upload,
   Download,
   FileText,
@@ -78,7 +73,6 @@ export default function ResourceForkParser() {
   const [parseError, setParseError] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [saveLoadOpen, setSaveLoadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"specs" | "data">("specs");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -227,22 +221,18 @@ export default function ResourceForkParser() {
         const remainingNames = nameTokens.length - nameIndex;
         
         if (remainingNames >= count) {
-          // We have separate names for each - store as expanded group
-          const groupNames: string[] = [];
+          // We have separate names for each - create one field per name with count=1
           for (let j = 0; j < count; j++) {
-            groupNames.push(nameTokens[nameIndex + j] || `field_${fieldIndex + j}`);
+            dataTypes.push({
+              id: (fieldIndex + j).toString(),
+              type: type,
+              count: 1,
+              description: nameTokens[nameIndex + j] || `field_${fieldIndex + j}`,
+            });
           }
           
-          dataTypes.push({
-            id: fieldIndex.toString(),
-            type: type,
-            count: count,
-            description: groupNames.join(','),
-            isExpandedGroup: true,
-          });
-          
           nameIndex += count;
-          fieldIndex++;
+          fieldIndex += count;
         } else {
           // Keep as single field with count
           dataTypes.push({
@@ -1252,21 +1242,20 @@ export default function ResourceForkParser() {
   // Extract data for DataBrowser (avoiding unknown type in JSX)
   const browserData = parsedResult?.data as Record<string, unknown> | undefined;
 
+  const fileName = currentFile?.name || parsedResult?.filename || 'Resource Fork';
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       <div className="max-w-5xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold text-white">
-            Mac Resource Fork Parser
-          </h1>
-          <p className="text-gray-400 text-lg">
-            {hasDataLoaded 
-              ? `Editing: ${currentFile?.name || parsedResult?.filename || 'Resource Fork'}`
-              : "Upload a resource fork file to analyze and experiment with data types"
-            }
-          </p>
-          {!hasDataLoaded && (
+        {/* Header - only shown before data is loaded */}
+        {!hasDataLoaded && (
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl font-bold text-white">
+              Mac Resource Fork Parser
+            </h1>
+            <p className="text-gray-400 text-lg">
+              Upload a resource fork file to analyze and experiment with data types
+            </p>
             <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
               <div className="flex items-center gap-2 text-yellow-200">
                 <AlertTriangle className="h-5 w-5" />
@@ -1278,8 +1267,8 @@ export default function ResourceForkParser() {
                 caution for production data.
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Main Control Panel */}
         <Card className="bg-gray-800 border-gray-700">
@@ -1350,13 +1339,13 @@ export default function ResourceForkParser() {
               </CardContent>
             </>
           ) : (
-            // Data loaded - show compact toolbar
+            // Data loaded - show compact toolbar with tabs
             <>
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-white">
                     <FileText className="h-5 w-5" />
-                    {currentFile?.name || parsedResult?.filename || 'Resource Fork'}
+                    {fileName}
                     {hasUnsavedChanges && (
                       <span className="text-xs text-yellow-400 font-normal">(modified)</span>
                     )}
@@ -1380,52 +1369,26 @@ export default function ResourceForkParser() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* View mode toggle */}
-                <div className="flex items-center gap-2 border-b border-gray-700 pb-3">
-                  <Button
-                    onClick={() => setViewMode("specs")}
-                    size="sm"
-                    variant={viewMode === "specs" ? "default" : "ghost"}
-                    className={viewMode === "specs" ? "bg-blue-600" : "text-gray-400"}
-                  >
-                    <Settings className="h-4 w-4 mr-1" />
-                    Struct Specs
-                  </Button>
-                  <Button
-                    onClick={() => setViewMode("data")}
-                    size="sm"
-                    variant={viewMode === "data" ? "default" : "ghost"}
-                    className={viewMode === "data" ? "bg-blue-600" : "text-gray-400"}
-                    disabled={!parsedResult?.success}
-                  >
-                    <Database className="h-4 w-4 mr-1" />
-                    Browse Data
-                  </Button>
-                </div>
+                {/* Tabs for struct specs / data browser */}
+                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "specs" | "data")}>
+                  <TabsList className="mb-3">
+                    <TabsTrigger value="specs" className="gap-1">
+                      <Settings className="h-4 w-4" />
+                      Struct Specs
+                    </TabsTrigger>
+                    <TabsTrigger value="data" disabled={!parsedResult?.success} className="gap-1">
+                      <Database className="h-4 w-4" />
+                      Browse Data
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Hidden tab content placeholder — actual content rendered outside the card below */}
+                  <TabsContent value="specs" />
+                  <TabsContent value="data" />
+                </Tabs>
 
                 {/* Compact action bar */}
                 <div className="flex flex-wrap gap-3">
-                  {/* File operations */}
-                  <Input
-                    type="file"
-                    accept=".rsrc"
-                    onChange={handleFileUpload}
-                    ref={fileInputRef}
-                    className="hidden"
-                  />
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    variant="outline"
-                    size="sm"
-                    disabled={isProcessing}
-                    className="border-gray-600"
-                  >
-                    <Upload className="h-4 w-4 mr-1" />
-                    New File
-                  </Button>
-
-                  <div className="w-px h-6 bg-gray-600 self-center" />
-
                   {/* Spec management */}
                   <Input
                     type="file"
@@ -1486,46 +1449,28 @@ export default function ResourceForkParser() {
                     <PackageOpen className="h-4 w-4 mr-1" />
                     Pack to RSRC
                   </Button>
-                </div>
 
-                {/* Convert JSON to RSRC - hidden in collapsible */}
-                <Collapsible open={saveLoadOpen} onOpenChange={setSaveLoadOpen}>
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-white p-0 h-auto"
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 mr-1 transition-transform ${
-                          saveLoadOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                      More Options
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="pt-4 flex gap-3">
-                      <Input
-                        type="file"
-                        accept=".json"
-                        onChange={handleJsonUpload}
-                        ref={jsonInputRef}
-                        className="hidden"
-                      />
-                      <Button
-                        onClick={() => jsonInputRef.current?.click()}
-                        variant="outline"
-                        size="sm"
-                        disabled={isProcessing || fourLetterCodes.length === 0}
-                        className="border-gray-600"
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        Convert JSON to RSRC
-                      </Button>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                  <div className="w-px h-6 bg-gray-600 self-center" />
+
+                  {/* Convert JSON to RSRC - shown directly (no collapsible needed for single item) */}
+                  <Input
+                    type="file"
+                    accept=".json"
+                    onChange={handleJsonUpload}
+                    ref={jsonInputRef}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => jsonInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessing || fourLetterCodes.length === 0}
+                    className="border-gray-600"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Convert JSON to RSRC
+                  </Button>
+                </div>
               </CardContent>
             </>
           )}
