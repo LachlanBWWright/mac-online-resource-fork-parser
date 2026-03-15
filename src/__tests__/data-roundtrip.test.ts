@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { saveToJson, loadBytesFromJsonAsync, load } from '@lachlanbwwright/rsrcdump-ts';
-import type { FourLetterCodeSpec } from '../components/resource-fork-parser/types';
+import { saveToJson, loadBytesFromJsonAsync } from '@lachlanbwwright/rsrcdump-ts';
 
 // Otto Matic terrain file specifications
 const OTTO_TERRAIN_SPECS = [

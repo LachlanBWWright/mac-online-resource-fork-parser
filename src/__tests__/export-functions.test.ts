@@ -24,7 +24,7 @@ function parseSpecString(specStr: string, nameTokens: string[]): DataTypeField[]
     const countTypeMatch = specStr.slice(currentIndex).match(/^(\d+)([A-Za-z?])/);
     if (countTypeMatch) {
       const count = parseInt(countTypeMatch[1]);
-      const type = countTypeMatch[2] as any;
+      const type = countTypeMatch[2] as 'L' | 'l' | 'i' | 'I' | 'h' | 'H' | 'f' | 'B' | 'b' | '?' | 'x' | 's' | 'p';
       currentIndex += countTypeMatch[0].length;
 
       if (type === 'x') {
@@ -89,7 +89,7 @@ function parseSpecString(specStr: string, nameTokens: string[]): DataTypeField[]
 
     const singleTypeMatch = specStr.slice(currentIndex).match(/^([A-Za-z?])/);
     if (singleTypeMatch) {
-      const type = singleTypeMatch[1] as any;
+      const type = singleTypeMatch[1] as 'L' | 'l' | 'i' | 'I' | 'h' | 'H' | 'f' | 'B' | 'b' | '?' | 'x' | 's' | 'p';
       currentIndex += singleTypeMatch[0].length;
 
       if (type === 'x') {
@@ -344,12 +344,14 @@ describe('Export Functions Tests', () => {
     it('should handle array specs correctly', () => {
       const specs = OTTO_TERRAIN_SPECS.map(parseOttoSpecToFourLetterCodeSpec);
 
-      const tsCode = generateTypeScriptInterfacesFromSpecs(specs);
-
       // Array types should be generated for specs with isArray=true
       // Atrb and STgd have the + suffix indicating arrays
       const atrbSpec = specs.find(s => s.fourCC === 'Atrb');
       expect(atrbSpec?.isArray).toBe(true);
+
+      // TypeScript generation should work for array specs
+      const tsCode = generateTypeScriptInterfacesFromSpecs(specs);
+      expect(tsCode).toContain('interface');
     });
   });
 

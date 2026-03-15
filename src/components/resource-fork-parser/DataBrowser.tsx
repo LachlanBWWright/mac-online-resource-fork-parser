@@ -541,7 +541,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   }
 
   return (
-    <Card className="bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 border-gray-700 shadow-xl">
+    <Card className="bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 border-gray-700 shadow-xl" data-testid="data-browser">
       <CardHeader className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-b border-gray-700/50">
         <div className="flex items-center justify-between">
           <div>

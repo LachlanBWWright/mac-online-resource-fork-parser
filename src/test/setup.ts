@@ -22,7 +22,7 @@ global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
           'Content-Type': 'application/octet-stream',
         }),
       });
-    } catch (error) {
+    } catch {
       return new Response(null, {
         status: 404,
         statusText: 'Not Found',
