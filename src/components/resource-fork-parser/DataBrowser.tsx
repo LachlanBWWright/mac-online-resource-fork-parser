@@ -541,30 +541,30 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   }
 
   return (
-    <Card className="bg-gray-800 border-gray-700">
-      <CardHeader>
+    <Card className="bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 border-gray-700 shadow-xl">
+      <CardHeader className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-b border-gray-700/50">
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Database className="h-5 w-5" />
+              <Database className="h-5 w-5 text-blue-400" />
               Data Browser
             </CardTitle>
-            <CardDescription className="text-gray-400 mt-1">
-              {filteredData.length} four-letter codes, {totalResources} total resources
+            <CardDescription className="text-gray-300 mt-1 font-medium">
+              {filteredData.length} four-letter codes • {totalResources} total resources
               {!readOnly && " • Click edit icon to modify values"}
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button onClick={expandAll} size="sm" variant="outline" className="border-gray-600">
+            <Button onClick={expandAll} size="sm" variant="outline" className="border-gray-600 hover:bg-blue-600/20 hover:border-blue-500">
               Expand All
             </Button>
-            <Button onClick={collapseAll} size="sm" variant="outline" className="border-gray-600">
+            <Button onClick={collapseAll} size="sm" variant="outline" className="border-gray-600 hover:bg-purple-600/20 hover:border-purple-500">
               Collapse All
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 bg-gray-900/50 backdrop-blur-sm">
         {/* Search and filter bar */}
         <div className="flex gap-3">
           <div className="relative flex-1">
@@ -588,13 +588,13 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
         </div>
 
         {/* Data tree - expands freely, no max height */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredData.map(({ fourCC, resources, resourceCount }) => (
-            <div key={fourCC} className="border border-gray-700 rounded-lg overflow-hidden">
+            <div key={fourCC} className="border border-gray-700 rounded-lg overflow-hidden shadow-lg bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur">
               {/* Four-letter code header */}
               <button
                 onClick={() => toggleCode(fourCC)}
-                className="w-full flex items-center justify-between p-3 bg-gray-750 hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-blue-900/30 to-purple-900/30 hover:from-blue-800/40 hover:to-purple-800/40 transition-all duration-200"
               >
                 <div className="flex items-center gap-3">
                   {expandedCodes.has(fourCC) ? (
@@ -611,16 +611,16 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
 
               {/* Resources */}
               {expandedCodes.has(fourCC) && resources && (
-                <div className="p-2 space-y-2 bg-gray-900">
+                <div className="p-3 space-y-2 bg-gradient-to-br from-gray-900/70 to-gray-850/70">
                   {Object.entries(resources).map(([resourceId, resource]) => {
                     const resourceKey = `${fourCC}-${resourceId}`;
                     const isExpanded = expandedResources.has(resourceKey);
 
                     return (
-                      <div key={resourceId} className="border border-gray-700 rounded">
+                      <div key={resourceId} className="border border-gray-700/70 rounded-md shadow-md overflow-hidden bg-gray-800/60 backdrop-blur-sm">
                         <button
                           onClick={() => toggleResource(resourceKey)}
-                          className="w-full flex items-center justify-between p-2 bg-gray-800 hover:bg-gray-750 transition-colors rounded-t"
+                          className="w-full flex items-center justify-between p-2.5 bg-gradient-to-r from-gray-800/80 to-gray-850/80 hover:from-gray-750/90 hover:to-gray-800/90 transition-all duration-150 rounded-t-md"
                         >
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
@@ -643,18 +643,18 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                         </button>
 
                         {isExpanded && (
-                          <div className="p-3 space-y-2 bg-gray-850 rounded-b">
+                          <div className="p-3 space-y-2 bg-gradient-to-br from-gray-900/80 to-gray-850/80 rounded-b-md border-t border-gray-700/50">
                             {resource.conversionError && (
-                              <div className="text-red-400 text-sm mb-2">
+                              <div className="text-red-400 text-sm mb-2 p-2 bg-red-900/20 border border-red-700/30 rounded-md">
                                 <strong>Error:</strong> {resource.conversionError}
                               </div>
                             )}
-                            
+
                             {resource.obj && (
-                              <div className="space-y-1">
+                              <div className="space-y-1.5">
                                 {Object.entries(resource.obj).map(([field, value]) => (
-                                  <div key={field} className="flex items-start gap-2 py-1">
-                                    <span className="text-gray-400 text-sm font-medium min-w-[120px] flex-shrink-0">
+                                  <div key={field} className="flex items-start gap-2 py-1.5 px-2 rounded-md hover:bg-gray-800/40 transition-colors">
+                                    <span className="text-gray-300 text-sm font-medium min-w-[120px] flex-shrink-0">
                                       {field}:
                                     </span>
                                     <div className="flex-1 min-w-0">
@@ -666,9 +666,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                             )}
 
                             {resource.data && !resource.obj && (
-                              <div>
-                                <span className="text-gray-400 text-xs">Raw Data (hex pairs):</span>
-                                <code className="block mt-1 text-xs text-orange-300 bg-gray-900 p-2 rounded break-all font-mono">
+                              <div className="p-2 bg-gray-900/60 rounded-md border border-gray-700/40">
+                                <span className="text-gray-400 text-xs font-medium">Raw Data (hex pairs):</span>
+                                <code className="block mt-1.5 text-xs text-orange-300 bg-gray-950/60 p-2.5 rounded-md break-all font-mono border border-gray-800/50">
                                   {formatHexPairs(resource.data)}
                                 </code>
                               </div>

@@ -20,4 +20,12 @@ export default defineConfig({
       '**/tests/**', // Exclude Playwright tests
     ],
   },
+  server: {
+    fs: {
+      allow: ['..']
+    }
+  },
+  preview: {
+    port: 4173,
+  },
 })
