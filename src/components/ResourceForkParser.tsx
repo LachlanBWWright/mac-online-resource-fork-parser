@@ -871,6 +871,22 @@ export default function ResourceForkParser() {
     }
   }, [extractFourLetterCodes, parseSpecString, parseWithSpecs]);
 
+  // Load EarthFarm sample file and switch to data browse view
+  const loadEarthFarmSampleAndBrowse = useCallback(async () => {
+    await loadEarthFarmSample();
+    // Switch to data view after loading
+    setTimeout(() => {
+      setViewMode("data");
+      // Scroll to the data browser section
+      setTimeout(() => {
+        const dataBrowserElement = document.querySelector('[data-testid="data-browser"]');
+        if (dataBrowserElement) {
+          dataBrowserElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }, 500);
+  }, [loadEarthFarmSample]);
+
   // Load EarthFarm sample file without struct specs - for users to define their own
   const loadEarthFarmSampleNoSpecs = useCallback(async () => {
     setParseError("");
@@ -1334,6 +1350,22 @@ export default function ResourceForkParser() {
                   >
                     <Edit3 className="h-4 w-4 mr-2" />
                     Load Sample (Define Your Own Specs)
+                  </Button>
+                </div>
+
+                {/* Tertiary option - load and browse */}
+                <div className="border-t border-gray-700 pt-4 mt-4">
+                  <p className="text-sm text-gray-400 mb-3">
+                    Jump directly to browsing the sample data:
+                  </p>
+                  <Button
+                    onClick={loadEarthFarmSampleAndBrowse}
+                    variant="outline"
+                    className="w-full bg-blue-900/30 hover:bg-blue-800/40 text-blue-100 border-blue-700/50"
+                    disabled={isProcessing}
+                  >
+                    <Database className="h-4 w-4 mr-2" />
+                    Load Sample & Browse Data
                   </Button>
                 </div>
               </CardContent>
