@@ -90,7 +90,7 @@ This allows you to define multiple related fields that repeat together as a grou
 
 ### Prerequisites
 - Node.js 18+
-- npm
+- pnpm
 
 ### Setup
 ```bash
@@ -101,23 +101,23 @@ git clone --recurse-submodules https://github.com/LachlanBWWright/mac-online-res
 git submodule init && git submodule update
 
 # Install dependencies
-npm install
+pnpm install
 
 # Start development server
-npm run dev
+pnpm dev
 ```
 
 ### Testing
 The application includes comprehensive Playwright tests:
 
 ```bash
-npm run test
-npm run test:unit
+pnpm test
+pnpm test:unit
 ```
 
 ### Building
 ```bash
-npm run build
+pnpm build
 ```
 
 ## Architecture
