@@ -39,6 +39,17 @@ async function expectLandingPage(page: Page) {
   await expect(page.getByText('Otto Matic — Level 1 Data')).toBeVisible();
 }
 
+async function waitForCollapsibleAnimations(page: Page) {
+  await page.waitForFunction(() =>
+    document
+      .querySelectorAll('[data-radix-collapsible-content]')
+      .length === 0 ||
+    [...document.querySelectorAll('[data-radix-collapsible-content]')].every((element) =>
+      element.getAnimations().every((animation) => animation.playState === 'finished' || animation.playState === 'idle'),
+    ),
+  );
+}
+
 async function loadSampleWithSpecs(page: Page) {
   await page.getByRole('button', { name: 'With struct data' }).first().click();
   await expect(page.getByText('EarthFarm.ter.rsrc')).toBeVisible({ timeout: 30_000 });
@@ -142,9 +153,17 @@ test.describe('Resource fork parser user journeys', () => {
       await toastClose.click({ force: true });
     }
 
-    await browser.getByRole('button', { name: /Expand children of/ }).first().click();
+    const expandChildren = browser.getByRole('button', { name: /Expand children of/ }).first();
+    const tooltipId = await expandChildren.getAttribute('aria-describedby');
+    expect(tooltipId).toBeTruthy();
+    await expandChildren.click({ timeout: 30_000 });
     await expect(browser.getByText(/Resource #/).first()).toBeVisible();
-    await browser.getByRole('button', { name: /Expand fields in/ }).first().click();
+    await waitForCollapsibleAnimations(page);
+    await expandChildren.hover();
+    await expect(page.locator(`#${tooltipId}`)).toHaveText('Collapse all child resources');
+    await expect(page.locator(`#${tooltipId}`)).toHaveCSS('opacity', '1');
+    const expandFields = browser.getByRole('button', { name: /Expand fields in/ }).first();
+    await expandFields.click({ timeout: 30_000 });
 
     const search = browser.getByPlaceholder('Search fields, values, IDs…');
     await search.fill('version');

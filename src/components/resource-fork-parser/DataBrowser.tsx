@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import ResourceDataEditor from "./ResourceDataEditor";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 
 interface DataBrowserProps {
   data: Record<string, unknown>;
@@ -259,42 +260,6 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       ),
     );
   }, [filteredData, searchQuery]);
-
-  const toggleCode = useCallback((fourCC: string) => {
-    setExpandedCodes(prev => {
-      const next = new Set(prev);
-      if (next.has(fourCC)) {
-        next.delete(fourCC);
-      } else {
-        next.add(fourCC);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleResource = useCallback((key: string) => {
-    setExpandedResources(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleNode = useCallback((key: string) => {
-    setExpandedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }, []);
 
   const expandCodeChildren = useCallback((fourCC: string, resourceIds: string[]) => {
     setExpandedCodes((current) => new Set([...current, fourCC]));
@@ -585,27 +550,30 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       const isExpanded = expandedNodes.has(nodeKey);
 
       return (
-        <div className="w-full">
-          <button
-            onClick={() => toggleNode(nodeKey)}
-            className="flex items-center gap-1 text-yellow-400 font-mono text-sm hover:text-yellow-300 transition-colors"
-          >
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Array ({value.length} items)
-          </button>
-          {isExpanded && (
+        <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedNodes((current) => {
+          const next = new Set(current);
+          if (open) next.add(nodeKey); else next.delete(nodeKey);
+          return next;
+        })} className="w-full">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-1 font-mono text-sm text-yellow-400 transition-colors hover:text-yellow-300">
+              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              Array ({value.length} items)
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="[&>div]:pb-0">
             <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
               {value.map((item, index) => (
                 <div key={index} className="flex items-start gap-2">
-                  <span className="text-gray-500 text-xs min-w-[2rem] flex-shrink-0">[{index}]</span>
-                  <div className="flex-1 min-w-0">
+                  <span className="min-w-[2rem] flex-shrink-0 text-xs text-gray-500">[{index}]</span>
+                  <div className="min-w-0 flex-1">
                     {renderValue(item, fourCC, resourceId, `${fieldPath}[${index}]`, depth + 1)}
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       );
     }
 
@@ -619,32 +587,35 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       const isExpanded = expandedNodes.has(nodeKey);
 
       return (
-        <div className="w-full">
-          <button
-            onClick={() => toggleNode(nodeKey)}
-            className="flex items-center gap-1 text-purple-400 font-mono text-sm hover:text-purple-300 transition-colors"
-          >
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Object ({entries.length} fields)
-          </button>
-          {isExpanded && (
+        <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedNodes((current) => {
+          const next = new Set(current);
+          if (open) next.add(nodeKey); else next.delete(nodeKey);
+          return next;
+        })} className="w-full">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-1 font-mono text-sm text-purple-400 transition-colors hover:text-purple-300">
+              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              Object ({entries.length} fields)
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="[&>div]:pb-0">
             <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-3">
               {entries.map(([key, val]) => (
                 <div key={key} className="flex items-start gap-2">
-                  <span className="text-gray-400 text-sm font-medium min-w-fit">{key}:</span>
-                  <div className="flex-1 min-w-0">
+                  <span className="min-w-fit text-sm font-medium text-gray-400">{key}:</span>
+                  <div className="min-w-0 flex-1">
                     {renderValue(val, fourCC, resourceId, `${fieldPath}.${key}`, depth + 1)}
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       );
     }
 
     return <span className="text-gray-400">{String(value)}</span>;
-  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes, toggleNode]);
+  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes]);
 
   const totalResources = useMemo(() => {
     return filteredData.reduce((sum, item) => sum + item.resourceCount, 0);
@@ -745,9 +716,29 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-3">
           {filteredData.map(({ fourCC, resources, resourceCount }) => (
-            <div key={fourCC} className="overflow-hidden border-b border-gray-700/80 bg-gray-800/30">
+            <Collapsible
+              key={fourCC}
+              open={expandedCodes.has(fourCC)}
+              onOpenChange={(open) => setExpandedCodes((current) => {
+                const next = new Set(current);
+                if (open) next.add(fourCC); else next.delete(fourCC);
+                return next;
+              })}
+              className="border-b border-gray-700/80 bg-gray-800/30"
+            >
               {/* Four-letter code header */}
-              <div className="flex items-center border-l-2 border-blue-500/70 bg-gray-900/80">
+              <div
+                className="flex items-center border-l-2 border-blue-500/70 bg-gray-900/80"
+                onClick={(event) => {
+                  if (!(event.target instanceof Element && event.target.closest("button"))) {
+                    setExpandedCodes((current) => {
+                      const next = new Set(current);
+                      if (next.has(fourCC)) next.delete(fourCC); else next.add(fourCC);
+                      return next;
+                    });
+                  }
+                }}
+              >
                 {editingFourCC === fourCC ? (
                   <div className="flex flex-1 flex-wrap items-start gap-2 p-2">
                     <div>
@@ -777,15 +768,19 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                   </div>
                 ) : (
                   <>
-                  <button
-                    onClick={() => toggleCode(fourCC)}
-                    data-testid={`resource-type-${fourCC}`}
-                    aria-label={`${expandedCodes.has(fourCC) ? "Collapse" : "Expand"} resource type ${fourCC}`}
-                    className="flex shrink-0 items-center p-3 text-left transition-colors hover:bg-blue-500/10"
-                  >
-                    {expandedCodes.has(fourCC) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-                  </button>
-                  <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      data-testid={`resource-type-${fourCC}`}
+                      aria-label={`${expandedCodes.has(fourCC) ? "Collapse" : "Expand"} resource type ${fourCC}`}
+                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-blue-500/10"
+                    >
+                      {expandedCodes.has(fourCC) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
+                      </Badge>
+                    </button>
+                  </CollapsibleTrigger>
                   {!readOnly && (
                     <Button
                       onClick={() => {
@@ -802,45 +797,55 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                    <Badge variant="secondary" className="text-xs">
-                      {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
-                    </Badge>
                   <div className="ml-auto flex shrink-0 items-center pr-2">
-                    <Button
-                      onClick={() => {
-                        const resourceIds = Object.keys(resources || {});
-                        const allExpanded = resourceIds.length > 0 && resourceIds.every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`));
-                        if (allExpanded) collapseCodeChildren(fourCC);
-                        else expandCodeChildren(fourCC, resourceIds);
-                      }}
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                      aria-label={`${Object.keys(resources || {}).length > 0 && Object.keys(resources || {}).every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`)) ? "Collapse" : "Expand"} children of ${fourCC}`}
-                      title="Toggle child resources"
-                    >
-                      {Object.keys(resources || {}).length > 0 && Object.keys(resources || {}).every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`)) ? <ChevronsUp className="h-4 w-4" /> : <ChevronsDown className="h-4 w-4" />}
-                    </Button>
+                    {(() => {
+                      const resourceIds = Object.keys(resources || {});
+                      const allExpanded = resourceIds.length > 0 && resourceIds.every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`));
+                      return (
+                        <div className="group relative">
+                          <Button
+                            onClick={() => allExpanded ? collapseCodeChildren(fourCC) : expandCodeChildren(fourCC, resourceIds)}
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+                            aria-label={`${allExpanded ? "Collapse" : "Expand"} children of ${fourCC}`}
+                            aria-describedby={`children-tooltip-${fourCC}`}
+                          >
+                            {allExpanded ? <ChevronsUp className="h-4 w-4" /> : <ChevronsDown className="h-4 w-4" />}
+                          </Button>
+                          <span id={`children-tooltip-${fourCC}`} role="tooltip" className="pointer-events-none absolute right-0 top-full z-30 mt-1 w-max max-w-52 rounded border border-gray-700 bg-gray-950 px-2 py-1 text-[11px] text-gray-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            {allExpanded ? "Collapse all child resources" : "Expand all child resources"}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   </>
                 )}
               </div>
 
               {/* Resources */}
-              {expandedCodes.has(fourCC) && resources && (
-            <div className="space-y-1 border-t border-gray-700/50 bg-gray-900/40 py-2 pl-3 sm:pl-4">
+              <CollapsibleContent className="[&>div]:pb-0">
+                {resources && <div className="space-y-1 border-t border-gray-700/50 bg-gray-900/40 py-2 pl-3 sm:pl-4">
                   {Object.entries(resources).map(([resourceId, resource]) => {
                     const resourceKey = `${fourCC}-${resourceId}`;
                     const isExpanded = expandedResources.has(resourceKey);
 
                     return (
-                      <div key={resourceId} className={`overflow-hidden border-b border-gray-800 last:border-b-0 ${selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId ? "bg-blue-500/10" : "bg-gray-900/40"}`}>
-                        <button
-                          onClick={() => { setSelectedResource({ fourCC, resourceId }); toggleResource(resourceKey); }}
-                          data-testid={`resource-${fourCC}-${resourceId}`}
-                          aria-label={`${isExpanded ? "Collapse" : "Expand"} resource ${resourceId}`}
-                          className="w-full flex items-center justify-between px-2 py-2 text-left hover:bg-gray-700/30 transition-colors"
-                        >
+                      <Collapsible key={resourceId} open={isExpanded} onOpenChange={(open) => {
+                        setSelectedResource({ fourCC, resourceId });
+                        setExpandedResources((current) => {
+                          const next = new Set(current);
+                          if (open) next.add(resourceKey); else next.delete(resourceKey);
+                          return next;
+                        });
+                      }} className={`border-b border-gray-800 last:border-b-0 ${selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId ? "bg-blue-500/10" : "bg-gray-900/40"}`}>
+                        <CollapsibleTrigger asChild>
+                          <button
+                            data-testid={`resource-${fourCC}-${resourceId}`}
+                            aria-label={`${isExpanded ? "Collapse" : "Expand"} resource ${resourceId}`}
+                            className="flex w-full items-center justify-between px-2 py-2 text-left transition-colors hover:bg-gray-700/30"
+                          >
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-3 w-3 text-gray-400" />
@@ -859,9 +864,11 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                             {resource.conversionError && (
                               <Badge variant="destructive" className="text-xs">Error</Badge>
                             )}
-                        </button>
+                          </button>
+                        </CollapsibleTrigger>
 
-                        {isExpanded && resource.obj && (
+                        <CollapsibleContent className="[&>div]:pb-0">
+                        {resource.obj && (
                           <div className="flex items-center justify-end border-t border-gray-700/40 px-3 py-1">
                             {(() => {
                               const childKeys = expandableNodeKeys(resource.obj, resourceKey);
@@ -883,7 +890,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                           </div>
                         )}
 
-                        {isExpanded && (
+                        {
                           <div className="space-y-2 border-t border-gray-700/50 bg-gray-950/30 px-3 py-3">
                             {resource.conversionError && (
                               <div className="text-red-400 text-sm mb-2 p-2 bg-red-900/20 border border-red-700/30 rounded-md">
@@ -928,13 +935,14 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                        }
+                        </CollapsibleContent>
+                      </Collapsible>
                     );
                   })}
-                </div>
-              )}
-            </div>
+                </div>}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
 
           {filteredData.length === 0 && (

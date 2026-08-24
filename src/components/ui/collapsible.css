@@ -1,0 +1,36 @@
+[data-radix-collapsible-content][data-state="open"] {
+  animation: collapsible-down 180ms ease-out both;
+}
+
+[data-radix-collapsible-content][data-state="closed"] {
+  animation: collapsible-up 150ms ease-in both;
+}
+
+@keyframes collapsible-down {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-radix-collapsible-content][data-state="open"],
+  [data-radix-collapsible-content][data-state="closed"] {
+    animation: none;
+  }
+}
