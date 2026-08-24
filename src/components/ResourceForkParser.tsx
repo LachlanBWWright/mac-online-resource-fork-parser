@@ -228,6 +228,7 @@ export default function ResourceForkParser() {
   const [sampleQuery, setSampleQuery] = useState("");
   const [sampleCategory, setSampleCategory] = useState<SampleDefinition["category"] | "All">("All");
   const [selectedSpecIndex, setSelectedSpecIndex] = useState(0);
+  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const specFileInputRef = useRef<HTMLInputElement>(null);
@@ -1238,6 +1239,16 @@ export default function ResourceForkParser() {
 
   const fileName = currentFile?.name || parsedResult?.filename || 'Resource Fork';
 
+  const clearLoadedFile = () => {
+    setCurrentFile(null);
+    setParsedResult(null);
+    setFourLetterCodes([]);
+    setParseError("");
+    setViewMode("specs");
+    setHasUnsavedChanges(false);
+    setShowCloseConfirmation(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1440px] space-y-5">
@@ -1365,6 +1376,16 @@ export default function ResourceForkParser() {
                       <FileText className="h-4 w-4 shrink-0 text-gray-400" />
                       <span className="max-w-[min(34vw,26rem)] truncate text-sm font-semibold text-white" title={fileName}>{fileName}</span>
                       {hasUnsavedChanges && <span className="shrink-0 text-[11px] text-yellow-400">modified</span>}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowCloseConfirmation(true)}
+                        className="h-7 shrink-0 px-2 text-gray-400 hover:text-white"
+                        aria-label="Close"
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" />
+                        Close
+                      </Button>
                     </div>
 
                     <TabsList className="h-8 bg-gray-800/80">
@@ -1460,22 +1481,6 @@ export default function ResourceForkParser() {
                     <Upload className="mr-1 h-3.5 w-3.5" />
                     Convert JSON to RSRC
                   </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setCurrentFile(null);
-                          setParsedResult(null);
-                          setFourLetterCodes([]);
-                          setParseError("");
-                          setViewMode("specs");
-                          setHasUnsavedChanges(false);
-                        }}
-                        className="border-gray-600 text-gray-400 hover:text-white"
-                      >
-                        <X className="mr-1 h-3.5 w-3.5" />
-                        Close
-                      </Button>
                     </div>
                   </div>
 
@@ -1486,6 +1491,32 @@ export default function ResourceForkParser() {
             </>
           )}
         </Card>
+
+        {showCloseConfirmation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/75 p-4 backdrop-blur-sm" role="presentation">
+            <div
+              className="w-full max-w-md border border-gray-700 bg-gray-900 p-5 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="close-file-title"
+              aria-describedby="close-file-description"
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full bg-yellow-500/15 p-2 text-yellow-300"><FileText className="h-4 w-4" /></div>
+                <div>
+                  <h2 id="close-file-title" className="font-semibold text-white">Close {fileName}?</h2>
+                  <p id="close-file-description" className="mt-1 text-sm leading-6 text-gray-400">
+                    {hasUnsavedChanges ? "You have unsaved changes. Closing will discard them." : "The current resource fork will be removed from the workspace."}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setShowCloseConfirmation(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={clearLoadedFile}>Close file</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {parseError.length > 0 ? (

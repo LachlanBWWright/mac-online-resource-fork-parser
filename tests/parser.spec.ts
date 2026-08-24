@@ -23,6 +23,12 @@ const additionalFixtures = [
   path: path.resolve(`public/test-files/opensource/${filename}`),
 }));
 
+async function closeLoadedFile(page: Page) {
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close file' }).click();
+}
+
 async function expectLandingPage(page: Page) {
   await expect(page.getByRole('heading', { name: 'Mac Resource Fork Parser' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Sample files' })).toBeVisible();
@@ -101,7 +107,7 @@ test.describe('Resource fork parser user journeys', () => {
       await expect(page.getByRole('heading', { name: 'Four-Letter Code Specifications' })).toBeVisible({ timeout: 30_000 });
 
       if (fixture !== additionalFixtures.at(-1)) {
-        await page.getByRole('button', { name: 'Close' }).click();
+        await closeLoadedFile(page);
         await expect(page.getByRole('heading', { name: 'Sample files' })).toBeVisible();
       }
     }
@@ -178,7 +184,7 @@ test.describe('Resource fork parser user journeys', () => {
 
   test('closes a loaded resource and returns to a clean landing state', async ({ page }) => {
     await loadSampleWithSpecs(page);
-    await page.getByRole('button', { name: 'Close' }).click();
+    await closeLoadedFile(page);
     await expectLandingPage(page);
     await expect(page.getByRole('button', { name: 'Close' })).not.toBeVisible();
   });
