@@ -30,7 +30,6 @@ import {
   PackageOpen,
   Database,
   Search,
-  MoreHorizontal,
 } from "lucide-react";
 import { useToast } from "../lib/toast";
 
@@ -229,7 +228,6 @@ export default function ResourceForkParser() {
   const [sampleQuery, setSampleQuery] = useState("");
   const [sampleCategory, setSampleCategory] = useState<SampleDefinition["category"] | "All">("All");
   const [selectedSpecIndex, setSelectedSpecIndex] = useState(0);
-  const [showMoreActions, setShowMoreActions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const specFileInputRef = useRef<HTMLInputElement>(null);
@@ -1360,62 +1358,29 @@ export default function ResourceForkParser() {
           ) : (
             // Data loaded - show compact toolbar with tabs
             <>
-              <CardHeader className="px-0 pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-white">
-                    <FileText className="h-5 w-5" />
-                    {fileName}
-                    {hasUnsavedChanges && (
-                      <span className="text-xs text-yellow-400 font-normal">(modified)</span>
-                    )}
-                  </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setCurrentFile(null);
-                      setParsedResult(null);
-                      setFourLetterCodes([]);
-                      setParseError("");
-                      setViewMode("specs");
-                      setHasUnsavedChanges(false);
-                    }}
-                    className="text-gray-400 hover:text-white border-gray-600"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Close
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 px-0">
-                {/* Tabs for struct specs / data browser */}
+              <div className="border-b border-gray-800/80 py-2">
                 <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "specs" | "data")}>
-                  <TabsList className="mb-3">
-                    <TabsTrigger value="specs" className="gap-1">
-                      <Settings className="h-4 w-4" />
-                      Struct Specs
-                    </TabsTrigger>
-                    <TabsTrigger value="data" disabled={!parsedResult?.success} className="gap-1">
-                      <Database className="h-4 w-4" />
-                      Browse Data
-                    </TabsTrigger>
-                  </TabsList>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2 pr-1">
+                      <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span className="max-w-[min(34vw,26rem)] truncate text-sm font-semibold text-white" title={fileName}>{fileName}</span>
+                      {hasUnsavedChanges && <span className="shrink-0 text-[11px] text-yellow-400">modified</span>}
+                    </div>
 
-                  {/* Hidden tab content placeholder — actual content rendered outside the card below */}
-                  <TabsContent value="specs" />
-                  <TabsContent value="data" />
-                </Tabs>
+                    <TabsList className="h-8 bg-gray-800/80">
+                      <TabsTrigger value="specs" className="h-6 gap-1 px-2 text-xs sm:px-3 sm:text-sm">
+                        <Settings className="h-3.5 w-3.5" />
+                        Struct Specs
+                      </TabsTrigger>
+                      <TabsTrigger value="data" disabled={!parsedResult?.success} className="h-6 gap-1 px-2 text-xs sm:px-3 sm:text-sm">
+                        <Database className="h-3.5 w-3.5" />
+                        Browse Data
+                      </TabsTrigger>
+                    </TabsList>
 
-                {/* Compact action bar */}
-                <div className="flex items-center justify-between gap-2 border-y border-gray-800 py-2 sm:hidden">
-                  <span className="text-xs text-gray-500">File actions</span>
-                  <div className="flex gap-2">
-                    <Button onClick={packToRsrc} size="sm" className={`${hasUnsavedChanges ? "bg-orange-600 hover:bg-orange-700" : "bg-blue-600 hover:bg-blue-500"} text-white`} disabled={!parsedResult?.success || isProcessing}><PackageOpen className="mr-1 h-4 w-4" />Pack</Button>
-                    <Button onClick={() => setShowMoreActions((current) => !current)} variant="outline" size="sm" className="border-gray-700"><MoreHorizontal className="mr-1 h-4 w-4" /> More</Button>
-                  </div>
-                </div>
-                <div className={`${showMoreActions ? "flex" : "hidden"} flex-wrap gap-2 sm:flex`}>
-                  {/* Spec management */}
+                    <div className="ml-auto flex flex-wrap items-center gap-1">
+                      <div className="mr-1 flex items-center gap-1 border-l border-gray-700 pl-2">
+                        {/* Spec management */}
                   <Input
                     type="file"
                     accept=".txt"
@@ -1429,7 +1394,7 @@ export default function ResourceForkParser() {
                     size="sm"
                     className="border-gray-600"
                   >
-                    <Settings className="h-4 w-4 mr-1" />
+                    <Settings className="mr-1 h-3.5 w-3.5" />
                     Load Specs
                   </Button>
                   <Button
@@ -1439,13 +1404,13 @@ export default function ResourceForkParser() {
                     disabled={fourLetterCodes.length === 0}
                     className="border-gray-600"
                   >
-                    <Download className="h-4 w-4 mr-1" />
+                    <Download className="mr-1 h-3.5 w-3.5" />
                     Save Specs
                   </Button>
+                      </div>
 
-                  <div className="hidden h-6 w-px self-center bg-gray-700 sm:block" />
-
-                  {/* Export & Pack */}
+                      <div className="mr-1 flex items-center gap-1 border-l border-gray-700 pl-2">
+                        {/* Export & Pack */}
                   <Button
                     onClick={downloadJson}
                     size="sm"
@@ -1453,7 +1418,7 @@ export default function ResourceForkParser() {
                     disabled={!parsedResult?.success}
                     className="border-gray-600"
                   >
-                    <FileJson className="h-4 w-4 mr-1" />
+                    <FileJson className="mr-1 h-3.5 w-3.5" />
                     Export JSON
                   </Button>
                   <Button
@@ -1463,7 +1428,7 @@ export default function ResourceForkParser() {
                     disabled={fourLetterCodes.length === 0}
                     className="border-gray-600"
                   >
-                    <Code className="h-4 w-4 mr-1" />
+                    <Code className="mr-1 h-3.5 w-3.5" />
                     Export TypeScript
                   </Button>
                   <Button
@@ -1472,13 +1437,12 @@ export default function ResourceForkParser() {
                     className={`${hasUnsavedChanges ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'} text-white`}
                     disabled={!parsedResult?.success || isProcessing}
                   >
-                    <PackageOpen className="h-4 w-4 mr-1" />
+                    <PackageOpen className="mr-1 h-3.5 w-3.5" />
                     Pack to RSRC
                   </Button>
+                      </div>
 
-                  <div className="hidden h-6 w-px self-center bg-gray-700 sm:block" />
-
-                  {/* Convert JSON to RSRC - shown directly (no collapsible needed for single item) */}
+                      {/* Convert JSON to RSRC */}
                   <Input
                     type="file"
                     accept=".json"
@@ -1493,11 +1457,32 @@ export default function ResourceForkParser() {
                     disabled={isProcessing || fourLetterCodes.length === 0}
                     className="border-gray-600"
                   >
-                    <Upload className="h-4 w-4 mr-1" />
+                    <Upload className="mr-1 h-3.5 w-3.5" />
                     Convert JSON to RSRC
                   </Button>
-                </div>
-              </CardContent>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCurrentFile(null);
+                          setParsedResult(null);
+                          setFourLetterCodes([]);
+                          setParseError("");
+                          setViewMode("specs");
+                          setHasUnsavedChanges(false);
+                        }}
+                        className="border-gray-600 text-gray-400 hover:text-white"
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" />
+                        Close
+                      </Button>
+                    </div>
+                  </div>
+
+                  <TabsContent value="specs" />
+                  <TabsContent value="data" />
+                </Tabs>
+              </div>
             </>
           )}
         </Card>
