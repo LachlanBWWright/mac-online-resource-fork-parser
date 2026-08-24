@@ -1,16 +1,20 @@
+import { useState } from "react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Plus } from "lucide-react";
+import { Check, Edit2, Plus, X } from "lucide-react";
 import type { FourLetterCodeSpec, DataTypeField, DataTypeOption } from "./types";
 import StatusIcon from "./StatusIcon";
 import SampleDataDisplay from "./SampleDataDisplay";
 import DataTypeFieldRow from "./DataTypeFieldRow";
 import UndefinedStructEditor from "./UndefinedStructEditor";
+import { calculateFieldLayout, generateSpecLine } from "./spec-model";
 
 interface FourLetterCodeSpecificationProps {
   spec: FourLetterCodeSpec;
   specIndex: number;
+  onFourCCChange: (index: number, fourCC: string) => void;
   updateFourLetterCodeSpec: (index: number, updates: Partial<FourLetterCodeSpec>) => void;
   addDataTypeToSpec: (specIndex: number) => void;
   addArrayFieldToSpec: (specIndex: number) => void;
@@ -26,6 +30,7 @@ interface FourLetterCodeSpecificationProps {
 export default function FourLetterCodeSpecification({
   spec,
   specIndex,
+  onFourCCChange,
   updateFourLetterCodeSpec,
   addDataTypeToSpec,
   addArrayFieldToSpec,
@@ -33,8 +38,13 @@ export default function FourLetterCodeSpecification({
   updateDataType,
   dataTypeOptions,
 }: FourLetterCodeSpecificationProps) {
+  const [isEditingFourCC, setIsEditingFourCC] = useState(false);
+  const [fourCCDraft, setFourCCDraft] = useState(spec.fourCC);
+  const [fourCCError, setFourCCError] = useState("");
+  const fieldLayout = calculateFieldLayout(spec.dataTypes);
+  const totalBytes = fieldLayout.at(-1)?.endOffset ?? 0;
   // Check if this is an undefined struct (default single integer field without user definition)
-  const isUndefinedStruct = !spec.hasUserDefinedSpec && 
+  const isUndefinedStruct = !spec.hasUserDefinedSpec && !spec.isInferredSpec && 
     spec.dataTypes.length === 1 && 
     spec.dataTypes[0].type === "i" &&
     spec.dataTypes[0].count === 1 &&
@@ -48,6 +58,17 @@ export default function FourLetterCodeSpecification({
     });
   };
 
+  const saveFourCC = () => {
+    const nextFourCC = fourCCDraft;
+    if (!/^[\x20-\x7e]{4}$/.test(nextFourCC)) {
+      setFourCCError("Use exactly four printable characters");
+      return;
+    }
+    onFourCCChange(specIndex, nextFourCC);
+    setFourCCError("");
+    setIsEditingFourCC(false);
+  };
+
   // If no rawData, create a dummy one with a message
   const dummyRawData = new Uint8Array([
     0x4e, 0x6f, 0x20, 0x72, 0x61, 0x77, 0x20, 0x64, 0x61, 0x74, 0x61, 0x20, 0x61, 0x76, 0x61, 0x69, 
@@ -57,15 +78,62 @@ export default function FourLetterCodeSpecification({
 
   return (
     <div 
-      className="border border-gray-600 rounded-lg p-6 space-y-6 bg-gray-750"
+      className="border-y border-gray-700/80 px-2 py-4 space-y-4 bg-gray-800/30 sm:px-4"
       data-testid={`flc-section-${spec.fourCC}`}
     >
       {/* Four-letter code header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h3 className="text-xl font-semibold text-white">{spec.fourCC}</h3>
+        <div className="flex min-w-0 items-center gap-4">
+          {isEditingFourCC ? (
+            <div className="flex flex-wrap items-start gap-2">
+              <div>
+                <Input
+                  value={fourCCDraft}
+                  onChange={(event) => {
+                    setFourCCDraft(event.target.value.slice(0, 4));
+                    setFourCCError("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") saveFourCC();
+                    if (event.key === "Escape") setIsEditingFourCC(false);
+                  }}
+                  aria-label={`Four-letter code for ${spec.fourCC}`}
+                  maxLength={4}
+                  autoFocus
+                  className="h-9 w-24 bg-gray-700 font-mono uppercase text-white"
+                />
+                {fourCCError && <p className="mt-1 text-xs text-red-400">{fourCCError}</p>}
+              </div>
+              <Button onClick={saveFourCC} size="sm" className="h-9 bg-green-600 px-2 hover:bg-green-700" aria-label="Save four-letter code">
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button onClick={() => setIsEditingFourCC(false)} size="sm" variant="ghost" className="h-9 px-2" aria-label="Cancel four-letter code edit">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h3 className="font-mono text-xl font-semibold text-white">{spec.fourCC}</h3>
+              <Button
+                onClick={() => {
+                  setFourCCDraft(spec.fourCC);
+                  setIsEditingFourCC(true);
+                }}
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-gray-400 hover:text-white"
+                aria-label={`Edit four-letter code ${spec.fourCC}`}
+                title="Edit four-letter code"
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <StatusIcon status={spec.status} />
+            {spec.isInferredSpec && (
+              <Badge variant="outline" className="text-xs">Inferred</Badge>
+            )}
             <Badge
               variant={
                 spec.status === "valid"
@@ -158,6 +226,7 @@ export default function FourLetterCodeSpecification({
             <Table>
               <TableHeader>
                 <TableRow className="border-gray-600">
+                  <TableHead className="text-gray-300">Offset</TableHead>
                   <TableHead className="text-gray-300">Type</TableHead>
                   <TableHead className="text-gray-300">Count</TableHead>
                   <TableHead className="text-gray-300">Description</TableHead>
@@ -165,7 +234,7 @@ export default function FourLetterCodeSpecification({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {spec.dataTypes.map((dataType) => (
+                {fieldLayout.map(({ field: dataType, offset, byteLength }) => (
                   <DataTypeFieldRow
                     key={dataType.id}
                     dataType={dataType}
@@ -174,10 +243,16 @@ export default function FourLetterCodeSpecification({
                     updateDataType={updateDataType}
                     removeDataType={removeDataTypeFromSpec}
                     dataTypeOptions={dataTypeOptions}
+                    offset={offset}
+                    byteLength={byteLength}
                   />
                 ))}
               </TableBody>
             </Table>
+            <div className="rounded bg-gray-900 p-3 text-sm text-gray-300">
+              <div className="mb-1 text-gray-400">Canonical spec · {totalBytes} bytes per record</div>
+              <code className="break-all text-cyan-300">{generateSpecLine(spec)}</code>
+            </div>
           </div>
         </>
       )}

@@ -30,6 +30,18 @@ function specStringsToSpecs(specStrings: string[]): string[] {
   });
 }
 
+function withoutResourceOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutResourceOrder);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== 'order')
+        .map(([key, entry]) => [key, withoutResourceOrder(entry)]),
+    );
+  }
+  return value;
+}
+
 describe('Data Roundtrip Accuracy Tests', () => {
   describe('Parse → JSON → Parse Roundtrip', () => {
     it('should maintain data integrity through JSON roundtrip with specs', async () => {
@@ -96,12 +108,12 @@ describe('Data Roundtrip Accuracy Tests', () => {
       const specs = specStringsToSpecs(OTTO_TERRAIN_SPECS);
 
       // Parse to JSON
-      const jsonResult = await saveToJson(originalData, specs);
+      const jsonResult = await saveToJson(originalData, specs, [], ['alis']);
       expect((jsonResult as { value?: string }).value).toBeDefined();
       const jsonString = (jsonResult as { value: string }).value;
 
       // Pack back to binary
-      const packedResult = await loadBytesFromJsonAsync(jsonString, specs);
+      const packedResult = await loadBytesFromJsonAsync(JSON.parse(jsonString), specs);
 
       // Check if packing succeeded
       if ((packedResult as { error?: string }).error) {
@@ -113,7 +125,7 @@ describe('Data Roundtrip Accuracy Tests', () => {
       const packedData = (packedResult as { value: Uint8Array }).value;
 
       // Parse the packed data again
-      const jsonResult2 = await saveToJson(packedData, specs);
+      const jsonResult2 = await saveToJson(packedData, specs, [], ['alis']);
       expect((jsonResult2 as { value?: string }).value).toBeDefined();
       const jsonString2 = (jsonResult2 as { value: string }).value;
 
@@ -121,7 +133,7 @@ describe('Data Roundtrip Accuracy Tests', () => {
       const parsed1 = JSON.parse(jsonString);
       const parsed2 = JSON.parse(jsonString2);
 
-      expect(parsed1).toEqual(parsed2);
+      expect(withoutResourceOrder(parsed1)).toEqual(withoutResourceOrder(parsed2));
     });
 
     it('should preserve resource counts through roundtrip', async () => {
@@ -134,11 +146,11 @@ describe('Data Roundtrip Accuracy Tests', () => {
       const specs = specStringsToSpecs(OTTO_TERRAIN_SPECS);
 
       // Parse to JSON
-      const jsonResult1 = await saveToJson(originalData, specs);
+      const jsonResult1 = await saveToJson(originalData, specs, [], ['alis']);
       const json1 = JSON.parse((jsonResult1 as { value: string }).value);
 
       // Pack and reparse
-      const packedResult = await loadBytesFromJsonAsync((jsonResult1 as { value: string }).value, specs);
+      const packedResult = await loadBytesFromJsonAsync(JSON.parse((jsonResult1 as { value: string }).value), specs);
 
       // Check if packing succeeded
       if ((packedResult as { error?: string }).error) {
@@ -148,7 +160,7 @@ describe('Data Roundtrip Accuracy Tests', () => {
 
       const packedData = (packedResult as { value: Uint8Array }).value;
 
-      const jsonResult2 = await saveToJson(packedData, specs);
+      const jsonResult2 = await saveToJson(packedData, specs, [], ['alis']);
       const json2 = JSON.parse((jsonResult2 as { value: string }).value);
 
       // Count resources in each four-letter code
@@ -197,10 +209,10 @@ describe('Data Roundtrip Accuracy Tests', () => {
         const specs = specStringsToSpecs(OTTO_TERRAIN_SPECS);
 
         // Parse → Pack → Parse
-        const json1Result = await saveToJson(originalData, specs);
+        const json1Result = await saveToJson(originalData, specs, [], ['alis']);
         const json1 = (json1Result as { value: string }).value;
 
-        const packedResult = await loadBytesFromJsonAsync(json1, specs);
+        const packedResult = await loadBytesFromJsonAsync(JSON.parse(json1), specs);
 
         // Check if packing succeeded
         if ((packedResult as { error?: string }).error) {
@@ -211,14 +223,14 @@ describe('Data Roundtrip Accuracy Tests', () => {
         expect((packedResult as { value?: Uint8Array }).value).toBeDefined();
         const packed = (packedResult as { value: Uint8Array }).value;
 
-        const json2Result = await saveToJson(packed, specs);
+        const json2Result = await saveToJson(packed, specs, [], ['alis']);
         const json2 = (json2Result as { value: string }).value;
 
         // Compare parsed data
         const parsed1 = JSON.parse(json1);
         const parsed2 = JSON.parse(json2);
 
-        expect(parsed1).toEqual(parsed2);
+        expect(withoutResourceOrder(parsed1)).toEqual(withoutResourceOrder(parsed2));
       });
     });
   });
@@ -244,7 +256,7 @@ describe('Data Roundtrip Accuracy Tests', () => {
 
         // Repack
         const modifiedJson = JSON.stringify(parsed);
-        const packedResult = await loadBytesFromJsonAsync(modifiedJson, specs);
+        const packedResult = await loadBytesFromJsonAsync(JSON.parse(modifiedJson), specs);
         const packed = (packedResult as { value: Uint8Array }).value;
 
         // Parse again

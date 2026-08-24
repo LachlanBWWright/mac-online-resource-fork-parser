@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { 
+import {
   Search, 
   Edit2, 
   Save, 
@@ -16,10 +16,13 @@ import {
   Filter,
   AlertCircle
 } from "lucide-react";
+import ResourceDataEditor from "./ResourceDataEditor";
 
 interface DataBrowserProps {
   data: Record<string, unknown>;
   onDataChange?: (fourCC: string, resourceId: string, newData: Record<string, unknown>) => void;
+  onResourceDataChange?: (fourCC: string, resourceId: string, hex: string) => void;
+  onFourCCChange?: (oldFourCC: string, newFourCC: string) => void;
   readOnly?: boolean;
 }
 
@@ -40,9 +43,18 @@ interface EditState {
   originalType: string; // explicit type tag: "integer", "float", "boolean", "string", "object", "array"
 }
 
+interface ChangeRecord {
+  fourCC: string;
+  resourceId: string;
+  fieldPath: string;
+  before: unknown;
+  after: unknown;
+}
+
 // Constants for validation and display
-const FOUR_LETTER_CODE_REGEX = /^[A-Za-z0-9]{4}$/;
+const FOUR_LETTER_CODE_REGEX = /^[\x20-\x7e]{4}$/;
 const STRING_DISPLAY_MAX_LENGTH = 200;
+const SPECIALIZED_DATA_EDITOR_TYPES = new Set(["PICT", "ICN#", "ics#", "icm#", "icl4", "ics4", "icm4", "icl8", "ics8", "icm8", "TEXT", "STR ", "STR#", "plst"]);
 
 /** Format hex data as space-separated byte pairs: "FF A3 B2 00" */
 function formatHexPairs(hexStr: string): string {
@@ -75,8 +87,11 @@ function parseEditedValue(raw: string, typeTag: string): { value: unknown; error
     }
     case "float": {
       const trimmed = raw.trim();
-      const n = parseFloat(trimmed);
-      if (isNaN(n)) return { value: null, error: "Must be a valid number" };
+      if (!/^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
+        return { value: null, error: "Must be a valid number" };
+      }
+      const n = Number(trimmed);
+      if (!Number.isFinite(n)) return { value: null, error: "Number is out of range" };
       return { value: n };
     }
     case "boolean": {
@@ -90,7 +105,14 @@ function parseEditedValue(raw: string, typeTag: string): { value: unknown; error
     case "object":
     case "array": {
       try {
-        return { value: JSON.parse(raw) };
+        const value = JSON.parse(raw) as unknown;
+        if (typeTag === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) {
+          return { value: null, error: "Must be a JSON object" };
+        }
+        if (typeTag === "array" && !Array.isArray(value)) {
+          return { value: null, error: "Must be a JSON array" };
+        }
+        return { value };
       } catch {
         return { value: null, error: "Invalid JSON" };
       }
@@ -142,7 +164,20 @@ function deepSet(obj: Record<string, unknown>, path: string, value: unknown): Re
   return setAt(obj, 0) as Record<string, unknown>;
 }
 
-export default function DataBrowser({ data, onDataChange, readOnly = false }: DataBrowserProps) {
+function expandableNodeKeys(value: unknown, baseKey: string): string[] {
+  if (Array.isArray(value)) {
+    const key = `${baseKey}--arr`;
+    return value.length > 5 ? [key, ...value.flatMap((item, index) => expandableNodeKeys(item, `${baseKey}[${index}]`))] : value.flatMap((item, index) => expandableNodeKeys(item, `${baseKey}[${index}]`));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    const key = `${baseKey}--obj`;
+    return [key, ...entries.flatMap(([field, child]) => expandableNodeKeys(child, `${baseKey}.${field}`))];
+  }
+  return [];
+}
+
+export default function DataBrowser({ data, onDataChange, onResourceDataChange, onFourCCChange, readOnly = false }: DataBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
@@ -152,6 +187,11 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   const [editError, setEditError] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [filterFourCC, setFilterFourCC] = useState<string>("");
+  const [changes, setChanges] = useState<Map<string, ChangeRecord>>(new Map());
+  const [editingFourCC, setEditingFourCC] = useState<string | null>(null);
+  const [fourCCDraft, setFourCCDraft] = useState("");
+  const [fourCCError, setFourCCError] = useState("");
+  const [selectedResource, setSelectedResource] = useState<{ fourCC: string; resourceId: string } | null>(null);
 
   // Extract four-letter codes and their resources
   const fourLetterCodes = useMemo(() => {
@@ -201,6 +241,23 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     }).filter((item): item is NonNullable<typeof item> => item !== null);
   }, [fourLetterCodes, searchQuery]);
 
+  const searchMatchCount = useMemo(() => filteredData.reduce((count, item) => count + item.resourceCount, 0), [filteredData]);
+  const selectedResourceEntry = selectedResource ? (data[selectedResource.fourCC] as Record<string, ResourceEntry> | undefined)?.[selectedResource.resourceId] : undefined;
+
+  // Search results are useful only when the matching resource is visible. Keep
+  // the tree open while searching so users do not have to expand every level.
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    setExpandedCodes(new Set(filteredData.map((item) => item.fourCC)));
+    setExpandedResources(
+      new Set(
+        filteredData.flatMap((item) =>
+          Object.keys(item.resources || {}).map((resourceId) => `${item.fourCC}-${resourceId}`),
+        ),
+      ),
+    );
+  }, [filteredData, searchQuery]);
+
   const toggleCode = useCallback((fourCC: string) => {
     setExpandedCodes(prev => {
       const next = new Set(prev);
@@ -237,14 +294,43 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     });
   }, []);
 
-  const expandAll = useCallback(() => {
-    setExpandedCodes(new Set(filteredData.map(item => item.fourCC)));
-  }, [filteredData]);
-
-  const collapseAll = useCallback(() => {
-    setExpandedCodes(new Set());
-    setExpandedResources(new Set());
+  const expandCodeChildren = useCallback((fourCC: string, resourceIds: string[]) => {
+    setExpandedCodes((current) => new Set([...current, fourCC]));
+    setExpandedResources((current) => new Set([...current, ...resourceIds.map((resourceId) => `${fourCC}-${resourceId}`)]));
   }, []);
+
+  const collapseCodeChildren = useCallback((fourCC: string) => {
+    setExpandedResources((current) => new Set([...current].filter((key) => !key.startsWith(`${fourCC}-`))));
+  }, []);
+
+  const expandResourceChildren = useCallback((fourCC: string, resourceId: string, resource: ResourceEntry) => {
+    const resourceKey = `${fourCC}-${resourceId}`;
+    const keys = resource.obj ? expandableNodeKeys(resource.obj, resourceKey) : [];
+    setExpandedResources((current) => new Set([...current, resourceKey]));
+    setExpandedCodes((current) => new Set([...current, fourCC]));
+    setExpandedNodes((current) => new Set([...current, ...keys]));
+  }, []);
+
+  const collapseResourceChildren = useCallback((fourCC: string, resourceId: string, resource: ResourceEntry) => {
+    const resourceKey = `${fourCC}-${resourceId}`;
+    const keys = resource.obj ? expandableNodeKeys(resource.obj, resourceKey) : [];
+    setExpandedNodes((current) => new Set([...current].filter((key) => !keys.includes(key))));
+  }, []);
+
+  const saveFourCC = useCallback(() => {
+    if (!editingFourCC || !onFourCCChange) return;
+    if (!FOUR_LETTER_CODE_REGEX.test(fourCCDraft)) {
+      setFourCCError("Use exactly four printable characters");
+      return;
+    }
+    if (fourLetterCodes.some(({ fourCC }) => fourCC === fourCCDraft && fourCC !== editingFourCC)) {
+      setFourCCError("That code is already in use");
+      return;
+    }
+    onFourCCChange(editingFourCC, fourCCDraft);
+    setEditingFourCC(null);
+    setFourCCError("");
+  }, [editingFourCC, fourCCDraft, fourLetterCodes, onFourCCChange]);
 
   const startEdit = useCallback((fourCC: string, resourceId: string, fieldPath: string, value: unknown) => {
     const typeTag = getTypeTag(value);
@@ -278,12 +364,37 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
     if (currentResource?.obj) {
       const newObj = deepSet(currentResource.obj, editState.fieldPath, parsedValue);
       onDataChange(editState.fourCC, editState.resourceId, newObj);
+      const changeKey = `${editState.fourCC}-${editState.resourceId}-${editState.fieldPath}`;
+      setChanges((current) => {
+        const next = new Map(current);
+        const existing = next.get(changeKey);
+        next.set(changeKey, {
+          fourCC: editState.fourCC,
+          resourceId: editState.resourceId,
+          fieldPath: editState.fieldPath,
+          before: existing?.before ?? editState.originalValue,
+          after: parsedValue,
+        });
+        return next;
+      });
     }
 
     setEditState(null);
     setEditValue("");
     setEditError("");
   }, [editState, editValue, onDataChange, data]);
+
+  const revertChange = useCallback((change: ChangeRecord) => {
+    const resources = data[change.fourCC] as Record<string, ResourceEntry>;
+    const resource = resources?.[change.resourceId];
+    if (!resource?.obj || !onDataChange) return;
+    onDataChange(change.fourCC, change.resourceId, deepSet(resource.obj, change.fieldPath, change.before));
+    setChanges((current) => {
+      const next = new Map(current);
+      next.delete(`${change.fourCC}-${change.resourceId}-${change.fieldPath}`);
+      return next;
+    });
+  }, [data, onDataChange]);
 
   const copyToClipboard = useCallback(async (text: string, fieldKey: string) => {
     try {
@@ -371,7 +482,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
               onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
-              className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 px-2 text-gray-400 hover:text-white"
+              aria-label={`Edit ${fieldPath}`}
+              title={`Edit ${fieldPath}`}
             >
               <Edit2 className="h-3 w-3" />
             </Button>
@@ -388,7 +501,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
             onClick={() => copyToClipboard(String(value), fieldKey)}
             size="sm"
             variant="ghost"
-            className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-6 px-2 text-gray-400 hover:text-white"
+            aria-label={`Copy ${fieldPath}`}
+            title={`Copy ${fieldPath}`}
           >
             {copiedField === fieldKey ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
@@ -397,7 +512,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
               onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
-              className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 px-2 text-gray-400 hover:text-white"
+              aria-label={`Edit ${fieldPath}`}
+              title={`Edit ${fieldPath}`}
             >
               <Edit2 className="h-3 w-3" />
             </Button>
@@ -421,7 +538,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
             onClick={() => copyToClipboard(value, fieldKey)}
             size="sm"
             variant="ghost"
-            className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            className="h-6 px-2 text-gray-400 hover:text-white flex-shrink-0"
+            aria-label={`Copy ${fieldPath}`}
+            title={`Copy ${fieldPath}`}
           >
             {copiedField === fieldKey ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
@@ -430,7 +549,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
               onClick={() => startEdit(fourCC, resourceId, fieldPath, value)}
               size="sm" 
               variant="ghost" 
-              className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              className="h-6 px-2 text-gray-400 hover:text-white flex-shrink-0"
+              aria-label={`Edit ${fieldPath}`}
+              title={`Edit ${fieldPath}`}
             >
               <Edit2 className="h-3 w-3" />
             </Button>
@@ -541,9 +662,9 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
   }
 
   return (
-    <Card className="bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 border-gray-700 shadow-xl" data-testid="data-browser">
-      <CardHeader className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-b border-gray-700/50">
-        <div className="flex items-center justify-between">
+    <Card className="border-0 bg-transparent shadow-none" data-testid="data-browser">
+      <CardHeader className="border-b border-gray-700/70 bg-gray-800/40 px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-white">
               <Database className="h-5 w-5 text-blue-400" />
@@ -552,75 +673,180 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
             <CardDescription className="text-gray-300 mt-1 font-medium">
               {filteredData.length} four-letter codes • {totalResources} total resources
               {!readOnly && " • Click edit icon to modify values"}
+              {searchQuery && ` • Showing matches for “${searchQuery}”`}
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={expandAll} size="sm" variant="outline" className="border-gray-600 hover:bg-blue-600/20 hover:border-blue-500">
-              Expand All
-            </Button>
-            <Button onClick={collapseAll} size="sm" variant="outline" className="border-gray-600 hover:bg-purple-600/20 hover:border-purple-500">
-              Collapse All
-            </Button>
-          </div>
+          <span className="hidden text-xs text-gray-500 sm:inline">Use each row’s child controls to open its contents</span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 bg-gray-900/50 backdrop-blur-sm">
+      <CardContent className="space-y-4 px-4 pb-0 pt-4 sm:px-5">
         {/* Search and filter bar */}
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search all fields and values..."
-              className="pl-9 bg-gray-900 border-gray-600"
+              placeholder="Search fields, values, IDs…"
+              aria-label="Search all fields and values"
+              className="border-gray-700 bg-gray-950 pl-9 pr-9"
             />
+            {searchQuery && <Button onClick={() => setSearchQuery("")} size="sm" variant="ghost" className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2 text-gray-500 hover:text-white" aria-label="Clear search"><X className="h-3.5 w-3.5" /></Button>}
           </div>
-          <div className="relative w-40">
+          <div className="relative w-full sm:w-40">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               value={filterFourCC}
               onChange={(e) => setFilterFourCC(e.target.value)}
               placeholder="Filter by code"
-              className="pl-9 bg-gray-900 border-gray-600"
+              aria-label="Filter by four-letter code"
+              className="border-gray-700 bg-gray-950 pl-9"
             />
           </div>
         </div>
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>{searchQuery ? `${searchMatchCount} matching resources` : `${totalResources} resources across ${filteredData.length} types`}</span>
+          {searchQuery && <span>Search includes decoded fields and resource IDs</span>}
+        </div>
+
+        {changes.size > 0 && (
+          <div className="rounded-md border border-yellow-700/60 bg-yellow-900/20 p-3 text-sm">
+            <div className="mb-2 flex items-center justify-between text-yellow-200">
+              <span className="font-medium">{changes.size} unsaved change{changes.size === 1 ? "" : "s"}</span>
+              <span className="text-xs text-yellow-300/70">Included when you pack the resource</span>
+            </div>
+            <div className="space-y-1">
+              {Array.from(changes.values()).map((change) => {
+                const changeKey = `${change.fourCC}-${change.resourceId}-${change.fieldPath}`;
+                return (
+                  <div key={changeKey} className="flex items-center justify-between gap-3 rounded bg-gray-900/60 px-2 py-1.5">
+                    <code className="min-w-0 truncate text-xs text-gray-200">
+                      {change.fourCC} / {change.resourceId} / {change.fieldPath}: {String(change.before)} → {String(change.after)}
+                    </code>
+                    <Button
+                      onClick={() => revertChange(change)}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 shrink-0 px-2 text-xs text-yellow-200"
+                      aria-label={`Revert ${change.fieldPath}`}
+                    >
+                      Revert
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Data tree - expands freely, no max height */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-3">
           {filteredData.map(({ fourCC, resources, resourceCount }) => (
-            <div key={fourCC} className="border border-gray-700 rounded-lg overflow-hidden shadow-lg bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur">
+            <div key={fourCC} className="overflow-hidden border-b border-gray-700/80 bg-gray-800/30">
               {/* Four-letter code header */}
-              <button
-                onClick={() => toggleCode(fourCC)}
-                className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-blue-900/30 to-purple-900/30 hover:from-blue-800/40 hover:to-purple-800/40 transition-all duration-200"
-              >
-                <div className="flex items-center gap-3">
-                  {expandedCodes.has(fourCC) ? (
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-gray-400" />
-                  )}
-                  <span className="text-lg font-mono font-semibold text-white">{fourCC}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
-                  </Badge>
-                </div>
-              </button>
+              <div className="flex items-center border-l-2 border-blue-500/70 bg-gray-900/80">
+                {editingFourCC === fourCC ? (
+                  <div className="flex flex-1 flex-wrap items-start gap-2 p-2">
+                    <div>
+                      <Input
+                        value={fourCCDraft}
+                        onChange={(event) => {
+                          setFourCCDraft(event.target.value.slice(0, 4));
+                          setFourCCError("");
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") saveFourCC();
+                          if (event.key === "Escape") setEditingFourCC(null);
+                        }}
+                        aria-label={`Edit four-letter code ${fourCC}`}
+                        maxLength={4}
+                        autoFocus
+                        className="h-8 w-24 bg-gray-900 font-mono text-white"
+                      />
+                      {fourCCError && <p className="mt-1 text-xs text-red-400">{fourCCError}</p>}
+                    </div>
+                    <Button onClick={saveFourCC} size="sm" className="h-8 bg-green-600 px-2 hover:bg-green-700" aria-label="Save four-letter code">
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button onClick={() => setEditingFourCC(null)} size="sm" variant="ghost" className="h-8 px-2" aria-label="Cancel four-letter code edit">
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                  <button
+                    onClick={() => toggleCode(fourCC)}
+                    data-testid={`resource-type-${fourCC}`}
+                    aria-label={`${expandedCodes.has(fourCC) ? "Collapse" : "Expand"} resource type ${fourCC}`}
+                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-blue-500/10"
+                  >
+                    {expandedCodes.has(fourCC) ? (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    )}
+                    <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
+                    </Badge>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1 pr-2">
+                    <Button
+                      onClick={(event) => { event.stopPropagation(); expandCodeChildren(fourCC, Object.keys(resources || {})); }}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-gray-400 hover:text-white"
+                      aria-label={`Expand children of ${fourCC}`}
+                      title="Expand resources"
+                    >
+                      + children
+                    </Button>
+                    <Button
+                      onClick={(event) => { event.stopPropagation(); collapseCodeChildren(fourCC); }}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-gray-400 hover:text-white"
+                      aria-label={`Collapse children of ${fourCC}`}
+                      title="Collapse resources"
+                    >
+                      − children
+                    </Button>
+                  </div>
+                  </>
+                )}
+                {!readOnly && editingFourCC !== fourCC && (
+                  <Button
+                    onClick={() => {
+                      setEditingFourCC(fourCC);
+                      setFourCCDraft(fourCC);
+                      setFourCCError("");
+                    }}
+                    size="sm"
+                    variant="ghost"
+                    className="mr-2 h-8 px-2 text-gray-400 hover:text-white"
+                    aria-label={`Edit four-letter code ${fourCC}`}
+                    title="Edit four-letter code"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
 
               {/* Resources */}
               {expandedCodes.has(fourCC) && resources && (
-                <div className="p-3 space-y-2 bg-gradient-to-br from-gray-900/70 to-gray-850/70">
+            <div className="space-y-1 border-t border-gray-700/50 bg-gray-900/40 py-2 pl-3 sm:pl-4">
                   {Object.entries(resources).map(([resourceId, resource]) => {
                     const resourceKey = `${fourCC}-${resourceId}`;
                     const isExpanded = expandedResources.has(resourceKey);
 
                     return (
-                      <div key={resourceId} className="border border-gray-700/70 rounded-md shadow-md overflow-hidden bg-gray-800/60 backdrop-blur-sm">
+                      <div key={resourceId} className={`overflow-hidden border-b border-gray-800 last:border-b-0 ${selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId ? "bg-blue-500/10" : "bg-gray-900/40"}`}>
                         <button
-                          onClick={() => toggleResource(resourceKey)}
-                          className="w-full flex items-center justify-between p-2.5 bg-gradient-to-r from-gray-800/80 to-gray-850/80 hover:from-gray-750/90 hover:to-gray-800/90 transition-all duration-150 rounded-t-md"
+                          onClick={() => { setSelectedResource({ fourCC, resourceId }); toggleResource(resourceKey); }}
+                          data-testid={`resource-${fourCC}-${resourceId}`}
+                          aria-label={`${isExpanded ? "Collapse" : "Expand"} resource ${resourceId}`}
+                          className="w-full flex items-center justify-between px-2 py-2 text-left hover:bg-gray-700/30 transition-colors"
                         >
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
@@ -628,7 +854,7 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                             ) : (
                               <ChevronRight className="h-3 w-3 text-gray-400" />
                             )}
-                            <span className="text-sm font-mono text-gray-300">
+                        <span className="text-sm font-mono text-gray-300">
                               Resource #{resourceId}
                             </span>
                             {resource.name && (
@@ -637,17 +863,34 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                               </span>
                             )}
                           </div>
-                          {resource.conversionError && (
-                            <Badge variant="destructive" className="text-xs">Error</Badge>
-                          )}
+                            {resource.conversionError && (
+                              <Badge variant="destructive" className="text-xs">Error</Badge>
+                            )}
                         </button>
 
+                        {isExpanded && resource.obj && (
+                          <div className="flex items-center justify-end gap-1 border-t border-gray-700/40 px-3 py-1">
+                            <Button onClick={() => expandResourceChildren(fourCC, resourceId, resource)} size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-gray-400 hover:text-white" aria-label={`Expand fields in ${fourCC} resource ${resourceId}`}>+ fields</Button>
+                            <Button onClick={() => collapseResourceChildren(fourCC, resourceId, resource)} size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-gray-400 hover:text-white" aria-label={`Collapse fields in ${fourCC} resource ${resourceId}`}>− fields</Button>
+                          </div>
+                        )}
+
                         {isExpanded && (
-                          <div className="p-3 space-y-2 bg-gradient-to-br from-gray-900/80 to-gray-850/80 rounded-b-md border-t border-gray-700/50">
+                          <div className="space-y-2 border-t border-gray-700/50 bg-gray-950/30 px-3 py-3">
                             {resource.conversionError && (
                               <div className="text-red-400 text-sm mb-2 p-2 bg-red-900/20 border border-red-700/30 rounded-md">
                                 <strong>Error:</strong> {resource.conversionError}
                               </div>
+                            )}
+
+                            {resource.data && onResourceDataChange && (
+                              <ResourceDataEditor
+                                fourCC={fourCC}
+                                resourceId={resourceId}
+                                hex={resource.data}
+                                onChange={(hex) => onResourceDataChange(fourCC, resourceId, hex)}
+                                readOnly={readOnly}
+                              />
                             )}
 
                             {resource.obj && (
@@ -660,12 +903,15 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
                                     <div className="flex-1 min-w-0">
                                       {renderValue(value, fourCC, resourceId, field)}
                                     </div>
+                                    {changes.has(`${fourCC}-${resourceId}-${field}`) && (
+                                      <Badge variant="secondary" className="text-[10px]">Edited</Badge>
+                                    )}
                                   </div>
                                 ))}
                               </div>
                             )}
 
-                            {resource.data && !resource.obj && (
+                            {resource.data && !resource.obj && !SPECIALIZED_DATA_EDITOR_TYPES.has(fourCC) && (
                               <div className="p-2 bg-gray-900/60 rounded-md border border-gray-700/40">
                                 <span className="text-gray-400 text-xs font-medium">Raw Data (hex pairs):</span>
                                 <code className="block mt-1.5 text-xs text-orange-300 bg-gray-950/60 p-2.5 rounded-md break-all font-mono border border-gray-800/50">
@@ -688,6 +934,23 @@ export default function DataBrowser({ data, onDataChange, readOnly = false }: Da
               No results found for &quot;{searchQuery || filterFourCC}&quot;
             </div>
           )}
+        </div>
+        {selectedResource && selectedResourceEntry && (
+          <aside className="border border-gray-800 bg-gray-950/70 lg:sticky lg:top-4" aria-label="Resource inspector">
+            <div className="border-b border-gray-800 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">Resource inspector</p><h2 className="mt-1 font-mono text-lg text-white">{selectedResource.fourCC} / {selectedResource.resourceId}</h2></div>
+                <Button onClick={() => setSelectedResource(null)} size="sm" variant="ghost" className="h-7 px-2 text-gray-500 hover:text-white" aria-label="Close resource inspector"><X className="h-4 w-4" /></Button>
+              </div>
+            </div>
+            <div className="space-y-4 p-4 text-sm">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs"><dt className="text-gray-500">Name</dt><dd className="truncate text-gray-300">{selectedResourceEntry.name || "—"}</dd><dt className="text-gray-500">Order</dt><dd className="text-gray-300">{selectedResourceEntry.order ?? "—"}</dd><dt className="text-gray-500">Representation</dt><dd className="text-gray-300">{selectedResourceEntry.obj ? "Decoded fields" : "Raw bytes"}</dd></dl>
+              {selectedResourceEntry.data && onResourceDataChange && <ResourceDataEditor fourCC={selectedResource.fourCC} resourceId={selectedResource.resourceId} hex={selectedResourceEntry.data} onChange={(hex) => onResourceDataChange(selectedResource.fourCC, selectedResource.resourceId, hex)} readOnly={readOnly} />}
+              {selectedResourceEntry.obj && <pre className="max-h-72 overflow-auto border border-gray-800 bg-gray-900 p-3 text-[11px] leading-5 text-gray-300">{JSON.stringify(selectedResourceEntry.obj, null, 2)}</pre>}
+              {selectedResourceEntry.conversionError && <p className="border border-red-900/70 bg-red-950/30 p-3 text-xs text-red-300">{selectedResourceEntry.conversionError}</p>}
+            </div>
+          </aside>
+        )}
         </div>
       </CardContent>
     </Card>

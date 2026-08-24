@@ -1,0 +1,4 @@
+[submodule "src/exten/rsrcdump"]
+	path = src/exten/rsrcdump
+	url = https://github.com/LachlanBWWright/rsrcdump.git
+	branch = master

@@ -7,6 +7,8 @@ import type { DataTypeField, DataTypeOption } from "./types";
 import ArrayFieldConfiguration from "./ArrayFieldConfiguration";
 
 interface DataTypeFieldRowProps {
+  offset: number;
+  byteLength: number;
   dataType: DataTypeField;
   specIndex: number;
   isLastField: boolean;
@@ -20,6 +22,8 @@ interface DataTypeFieldRowProps {
 }
 
 export default function DataTypeFieldRow({
+  offset,
+  byteLength,
   dataType,
   specIndex,
   isLastField,
@@ -33,6 +37,9 @@ export default function DataTypeFieldRow({
   return (
     <>
       <TableRow className={`border-gray-600 ${dataType.isArrayField ? "bg-gray-750" : ""}`}>
+        <TableCell className="whitespace-nowrap text-xs text-gray-400">
+          {offset}–{offset + byteLength - 1}
+        </TableCell>
         {!dataType.isArrayField && (
           <TableCell>
             <Select
@@ -68,6 +75,7 @@ export default function DataTypeFieldRow({
                   count: parseInt(e.target.value) || 1,
                 })
               }
+              aria-label={`Count for ${dataType.description || dataType.id}`}
               className="w-20 bg-gray-700 border-gray-600 text-white"
               min="1"
             />
@@ -91,6 +99,7 @@ export default function DataTypeFieldRow({
                   description: e.target.value,
                 })
               }
+              aria-label={`Field name for ${dataType.description || dataType.id}`}
               className="w-48 bg-gray-700 border-gray-600 text-white"
               placeholder="Field description"
             />

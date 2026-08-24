@@ -131,6 +131,15 @@ export default function UndefinedStructEditor({
     return possibleDivisors.filter(div => div >= 4 && div <= 256).slice(0, 6);
   }, [possibleDivisors]);
 
+  const candidateLayouts = useMemo(
+    () => suggestedStructSizes.map((size) => ({
+      size,
+      records: dataSize / size,
+      evidence: size % 4 === 0 ? "4-byte aligned candidate" : "byte-aligned candidate",
+    })),
+    [dataSize, suggestedStructSizes],
+  );
+
   const handleAddField = useCallback(() => {
     const newId = (fields.length + 1).toString();
     setFields([
@@ -244,15 +253,20 @@ export default function UndefinedStructEditor({
 
           {possibleDivisors.length > 0 && (
             <div>
-              <span className="text-gray-400">Possible Record Sizes:</span>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300 font-medium">Candidate record layouts</span>
+                <span className="text-gray-500">Size and alignment evidence</span>
+              </div>
+              <p className="text-gray-500 mt-1">Choose a candidate to start a draft, then verify the decoded fields before applying it.</p>
               <div className="flex flex-wrap gap-1 mt-1">
-                {possibleDivisors.map((div) => (
+                {candidateLayouts.map(({ size, records, evidence }) => (
                   <Badge
-                    key={div}
+                    key={size}
                     variant="secondary"
                     className="bg-gray-700 text-gray-200 text-xs"
+                    title={evidence}
                   >
-                    {div} bytes ({dataSize / div} records)
+                    {size} bytes ({records} records)
                   </Badge>
                 ))}
               </div>
@@ -355,19 +369,20 @@ export default function UndefinedStructEditor({
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-300"
           >
             {showAdvanced ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Quick-fill templates
+            Candidate templates
           </button>
           {showAdvanced && (
             <div className="flex flex-wrap gap-1">
-              {suggestedStructSizes.map((size) => (
+              {candidateLayouts.map(({ size, records, evidence }) => (
                 <Button
                   key={size}
                   onClick={() => handleAutoFillStruct(size)}
                   variant="outline"
                   size="sm"
                   className="text-xs h-7 px-2 border-gray-600"
+                  title={evidence}
                 >
-                  {size} bytes ({Math.floor(size / 4)} ints)
+                  {size} bytes · {records} records
                 </Button>
               ))}
             </div>
@@ -384,18 +399,20 @@ export default function UndefinedStructEditor({
 
         {possibleDivisors.length > 0 && (
           <div>
-            <span className="text-gray-400">Possible Record Sizes:</span>
+            <span className="text-gray-300 font-medium">Candidate record layouts</span>
+            <p className="text-gray-500 mt-1">Candidates are inferred from divisibility and common alignment boundaries, not from semantic decoding.</p>
             <div className="flex flex-wrap gap-1 mt-1">
-              {possibleDivisors.slice(0, 8).map((div) => (
+              {candidateLayouts.map(({ size, records, evidence }) => (
                 <Badge
-                  key={div}
+                  key={size}
                   variant="secondary"
                   className={`text-xs cursor-pointer hover:bg-gray-600 ${
-                    currentStructSize === div ? 'bg-green-700 text-green-100' : 'bg-gray-700 text-gray-200'
+                    currentStructSize === size ? 'bg-green-700 text-green-100' : 'bg-gray-700 text-gray-200'
                   }`}
-                  onClick={() => handleAutoFillStruct(div)}
+                  onClick={() => handleAutoFillStruct(size)}
+                  title={evidence}
                 >
-                  {div} bytes ({dataSize / div} records)
+                  {size} bytes ({records} records)
                 </Badge>
               ))}
             </div>
@@ -490,6 +507,42 @@ export default function UndefinedStructEditor({
             )}
           </div>
         ))}
+      </div>
+
+      <div className="space-y-1 rounded bg-gray-900/70 p-3">
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>Byte layout preview</span>
+          <span>{currentStructSize} / {dataSize} bytes covered</span>
+        </div>
+        <div className="flex h-8 overflow-hidden rounded border border-gray-700 bg-gray-950">
+          {fields.map((field) => {
+            const fieldBytes = TYPE_SIZES[field.type] * field.count;
+            const width = currentStructSize > 0 ? Math.max((fieldBytes / currentStructSize) * 100, 3) : 100;
+            return (
+              <div
+                key={field.id}
+                className={`flex min-w-0 items-center justify-center border-r border-gray-900 px-1 text-[10px] text-white ${field.isPadding ? "bg-gray-700" : "bg-blue-700"}`}
+                style={{ width: `${width}%` }}
+                title={`${field.description || "Padding"}: ${fieldBytes} bytes`}
+              >
+                <span className="truncate">{field.description || "padding"}</span>
+              </div>
+            );
+          })}
+          {currentStructSize < dataSize && (
+            <div
+              className="flex min-w-[8%] flex-1 items-center justify-center bg-yellow-800 text-[10px] text-yellow-100"
+              title={`${dataSize - currentStructSize} bytes not covered`}
+            >
+              uncovered
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-500">
+          <span>offset 0</span>
+          <span>spec end {Math.max(currentStructSize - 1, 0)}</span>
+          <span>data end {dataSize - 1}</span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

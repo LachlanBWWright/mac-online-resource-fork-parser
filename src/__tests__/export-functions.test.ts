@@ -244,7 +244,7 @@ describe('Export Functions Tests', () => {
       const jsonString = (jsonResult as { value: string }).value;
 
       // Pack back to binary
-      const packedResult = await loadBytesFromJsonAsync(jsonString, specs);
+      const packedResult = await loadBytesFromJsonAsync(JSON.parse(jsonString), specs);
 
       // Check if packing succeeded
       if ((packedResult as { error?: string }).error) {
@@ -275,7 +275,7 @@ describe('Export Functions Tests', () => {
       const json1Result = await saveToJson(data, specs);
       const json1 = (json1Result as { value: string }).value;
 
-      const packedResult = await loadBytesFromJsonAsync(json1, specs);
+      const packedResult = await loadBytesFromJsonAsync(JSON.parse(json1), specs);
 
       // Check if packing succeeded
       if ((packedResult as { error?: string }).error) {
@@ -373,7 +373,7 @@ describe('Export Functions Tests', () => {
       const exportedJson = (jsonResult as { value: string }).value;
 
       // Convert back (simulating JSON upload and conversion)
-      const convertedResult = await loadBytesFromJsonAsync(exportedJson, specs);
+      const convertedResult = await loadBytesFromJsonAsync(JSON.parse(exportedJson), specs);
 
       // Check if conversion succeeded
       if ((convertedResult as { error?: string }).error) {
@@ -407,7 +407,7 @@ describe('Export Functions Tests', () => {
 
       // Export → Import → Parse
       const exportedJson = json1; // Simulated file save/load
-      const importedResult = await loadBytesFromJsonAsync(exportedJson, specs);
+      const importedResult = await loadBytesFromJsonAsync(JSON.parse(exportedJson), specs);
 
       // Check if import succeeded
       if ((importedResult as { error?: string }).error) {

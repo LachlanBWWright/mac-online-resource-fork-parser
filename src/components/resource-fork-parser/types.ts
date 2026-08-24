@@ -40,6 +40,8 @@ export interface DataTypeField {
 
 export interface FourLetterCodeSpec {
   fourCC: string;
+  /** Original resource type in the source file when the user renames a code. */
+  sourceFourCC?: string;
   dataTypes: DataTypeField[];
   isArray: boolean;
   autoPadding?: boolean;
@@ -48,6 +50,7 @@ export interface FourLetterCodeSpec {
   sampleData?: unknown | null; // Changed from ParsedResourceCollection to unknown for flexibility
   rawOttoSpec?: string; // Raw specification string for Otto specs
   hasUserDefinedSpec?: boolean; // Whether the user has defined a custom spec
+  isInferredSpec?: boolean; // A built-in layout matched this well-known type
   rawData?: Uint8Array; // Raw binary data for undefined structs
 }
 
