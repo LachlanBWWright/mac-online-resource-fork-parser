@@ -25,6 +25,123 @@ function hexFromBytes(bytes: Uint8Array) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
+function printableByte(byte: number) {
+  return byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : ".";
+}
+
+function HexEditor({ fourCC, resourceId, hex, onChange, readOnly }: Props) {
+  const [draft, setDraft] = useState(hex);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(0);
+  const [cellDrafts, setCellDrafts] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    setDraft(hex);
+    setPage(0);
+    setCellDrafts({});
+    setError("");
+  }, [hex]);
+
+  const bytes = (() => {
+    try { return bytesFromHex(draft); } catch { return null; }
+  })();
+  const pageSize = 256;
+  const pageCount = bytes ? Math.max(1, Math.ceil(bytes.length / pageSize)) : 1;
+  const pageStart = page * pageSize;
+  const pageBytes = bytes?.slice(pageStart, pageStart + pageSize) ?? new Uint8Array();
+  const rows = Array.from({ length: Math.ceil(pageBytes.length / 16) }, (_, row) => pageBytes.slice(row * 16, row * 16 + 16));
+
+  const updateByte = (absoluteIndex: number, value: string) => {
+    const cleaned = value.replace(/[^0-9a-f]/gi, "").slice(0, 2).toUpperCase();
+    setCellDrafts((current) => ({ ...current, [absoluteIndex]: cleaned }));
+    if (cleaned.length !== 2) return;
+    try {
+      const next = bytesFromHex(draft);
+      if (absoluteIndex >= next.length) return;
+      next[absoluteIndex] = Number.parseInt(cleaned, 16);
+      setDraft(hexFromBytes(next));
+      setCellDrafts((current) => ({ ...current, [absoluteIndex]: cleaned }));
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Invalid data");
+    }
+  };
+
+  const finishByte = (absoluteIndex: number) => {
+    const value = cellDrafts[absoluteIndex];
+    if (value === undefined || value.length === 2) return;
+    if (value.length === 1) updateByte(absoluteIndex, `0${value}`);
+    else setCellDrafts((current) => {
+      return Object.fromEntries(Object.entries(current).filter(([key]) => key !== String(absoluteIndex)));
+    });
+  };
+
+  const commit = () => {
+    try {
+      onChange(hexFromBytes(bytesFromHex(draft)));
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Invalid data");
+    }
+  };
+
+  return <div data-testid="hex-editor" className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-gray-300">Hex editor</div>
+        <div className="text-xs text-gray-500">{fourCC} · #{resourceId} · {bytes?.length ?? 0} bytes</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500">Page {Math.min(page + 1, pageCount)} of {pageCount}</span>
+        <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
+        <Button size="sm" variant="outline" disabled={page >= pageCount - 1} onClick={() => setPage((current) => current + 1)}>Next</Button>
+        {!readOnly && <Button size="sm" onClick={commit}>Apply changes</Button>}
+      </div>
+    </div>
+    {bytes ? <div className="overflow-auto border border-gray-700 bg-gray-950 p-2">
+      <table className="min-w-[780px] border-collapse font-mono text-xs" aria-label={`Hex data for ${fourCC} ${resourceId}`}>
+        <thead className="text-gray-500">
+          <tr>
+            <th className="w-24 px-2 py-1 text-left font-normal">Offset</th>
+            {Array.from({ length: 16 }, (_, index) => <th key={index} className="w-8 px-1 py-1 text-center font-normal">{index.toString(16).toUpperCase()}</th>)}
+            <th className="px-3 py-1 text-left font-normal">ASCII</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => {
+            const absoluteStart = pageStart + rowIndex * 16;
+            return <tr key={absoluteStart} className="border-t border-gray-800">
+              <td className="px-2 py-1 text-gray-500">{absoluteStart.toString(16).padStart(8, "0").toUpperCase()}</td>
+              {Array.from({ length: 16 }, (_, column) => {
+                const absoluteIndex = absoluteStart + column;
+                const byte = row[column];
+                if (byte === undefined) return <td key={column} />;
+                const value = cellDrafts[absoluteIndex] ?? byte.toString(16).padStart(2, "0").toUpperCase();
+                return <td key={column} className="px-1 py-1">
+                  <input
+                    aria-label={`Hex byte ${absoluteIndex}`}
+                    data-testid={`hex-byte-${absoluteIndex}`}
+                    value={value}
+                    maxLength={2}
+                    readOnly={readOnly}
+                    spellCheck={false}
+                    onChange={(event) => updateByte(absoluteIndex, event.target.value)}
+                    onBlur={() => finishByte(absoluteIndex)}
+                    className="h-7 w-8 rounded border border-gray-700 bg-gray-900 px-1 text-center text-gray-100 outline-none transition-colors hover:border-gray-500 focus:border-blue-400 focus:ring-1 focus:ring-blue-400/50"
+                  />
+                </td>;
+              })}
+              <td className="whitespace-pre px-3 py-1 text-gray-400">{Array.from(row, printableByte).join("")}</td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div> : <p className="text-sm text-red-300">The draft contains invalid hexadecimal data. Fix it before applying changes.</p>}
+    {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+    <p className="text-xs text-gray-500">Edit bytes as hexadecimal pairs. The ASCII column is a read-only preview; changes are saved when you apply them.</p>
+  </div>;
+}
+
 function iconDimensions(type: string) {
   if (type.startsWith("icm")) return { width: 12, height: 16 };
   if (type.startsWith("ics")) return { width: 16, height: 16 };
@@ -89,8 +206,6 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
       setPictError(caught instanceof Error ? caught.message : "Unable to decode this QuickDraw picture");
     }
   }, [bytes, isPict]);
-
-  if (!isIcon && !isText && !isPict) return null;
 
   const commit = (value: string) => {
     try { onChange(hexFromBytes(bytesFromHex(value))); setError(""); }
@@ -157,11 +272,13 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
     {error && <p className="text-xs text-red-400">{error}</p>}
   </div>;
 
-  return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
+  if (isIcon) return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
     <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bitmap editor</span><span className="text-xs text-gray-500">{dimensions?.width}×{dimensions?.height} · {fourCC}</span></div>
     <canvas ref={canvasRef} onClick={editPixel} aria-label={`Edit ${fourCC} bitmap ${resourceId}`} className="h-auto max-w-full cursor-crosshair border border-gray-600 bg-gray-950" />
     {!readOnly && <p className="text-xs text-gray-500">Click pixels to toggle monochrome values or cycle indexed color values.</p>}
     <div className="flex gap-2"><Input aria-label={`Hex data for ${fourCC} ${resourceId}`} value={draft} readOnly={readOnly} onChange={(event) => setDraft(event.target.value)} className="font-mono text-xs" />{!readOnly && <Button size="sm" onClick={() => commit(draft)}>Apply hex</Button>}</div>
     {error && <p className="text-xs text-red-400">{error}</p>}
   </div>;
+
+  return <HexEditor fourCC={fourCC} resourceId={resourceId} hex={hex} onChange={onChange} readOnly={readOnly} />;
 }

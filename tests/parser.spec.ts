@@ -182,6 +182,36 @@ test.describe('Resource fork parser user journeys', () => {
     await expect(browser.getByText('1 unsaved change')).not.toBeVisible();
   });
 
+  test('provides a paged hex editor for raw resource data', async ({ page }) => {
+    await page.getByRole('button', { name: 'Without struct data' }).first().click();
+    await expect(page.getByText('EarthFarm.ter.rsrc')).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('tab', { name: /Browse Data/ }).click();
+    const browser = page.getByTestId('data-browser');
+    await expect(browser).toBeVisible({ timeout: 30_000 });
+
+    const rawType = browser.getByTestId('resource-type-STgd');
+    await expect(rawType).toBeVisible({ timeout: 30_000 });
+    await rawType.click();
+    const resource = browser.getByTestId('resource-STgd-1000');
+    await expect(resource).toBeVisible({ timeout: 30_000 });
+    await resource.click();
+
+    const editor = browser.getByTestId('hex-editor');
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await expect(editor.getByText('Hex editor')).toBeVisible();
+    await expect(editor.getByText(/bytes$/)).toBeVisible();
+    await expect(editor.getByRole('columnheader', { name: 'Offset' })).toBeVisible();
+    await expect(editor.getByRole('columnheader', { name: 'ASCII' })).toBeVisible();
+    await expect(editor.getByTestId('hex-byte-0')).toHaveValue(/^[0-9A-F]{2}$/);
+
+    const firstByte = editor.getByTestId('hex-byte-0');
+    await firstByte.fill('FF');
+    await expect(firstByte).toHaveValue('FF');
+    await editor.getByRole('button', { name: 'Apply changes' }).click();
+    await expect(page.getByText('Resource bytes modified')).toBeVisible();
+    await expect(page.getByText('modified').first()).toBeVisible();
+  });
+
   test('exports JSON, TypeScript, specifications, and the packed resource fork', async ({ page }) => {
     await loadSampleWithSpecs(page);
 
