@@ -10,6 +10,8 @@ import {
   X, 
   ChevronDown, 
   ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   Database,
   Copy,
   Check,
@@ -779,57 +781,48 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                     onClick={() => toggleCode(fourCC)}
                     data-testid={`resource-type-${fourCC}`}
                     aria-label={`${expandedCodes.has(fourCC) ? "Collapse" : "Expand"} resource type ${fourCC}`}
-                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-blue-500/10"
+                    className="flex shrink-0 items-center p-3 text-left transition-colors hover:bg-blue-500/10"
                   >
-                    {expandedCodes.has(fourCC) ? (
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    )}
-                    <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
+                    {expandedCodes.has(fourCC) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                  </button>
+                  <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
+                  {!readOnly && (
+                    <Button
+                      onClick={() => {
+                        setEditingFourCC(fourCC);
+                        setFourCCDraft(fourCC);
+                        setFourCCError("");
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-1.5 text-gray-400 hover:text-white"
+                      aria-label={`Edit four-letter code ${fourCC}`}
+                      title="Edit four-letter code"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                     <Badge variant="secondary" className="text-xs">
                       {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
                     </Badge>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1 pr-2">
+                  <div className="ml-auto flex shrink-0 items-center pr-2">
                     <Button
-                      onClick={(event) => { event.stopPropagation(); expandCodeChildren(fourCC, Object.keys(resources || {})); }}
+                      onClick={() => {
+                        const resourceIds = Object.keys(resources || {});
+                        const allExpanded = resourceIds.length > 0 && resourceIds.every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`));
+                        if (allExpanded) collapseCodeChildren(fourCC);
+                        else expandCodeChildren(fourCC, resourceIds);
+                      }}
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 text-xs text-gray-400 hover:text-white"
-                      aria-label={`Expand children of ${fourCC}`}
-                      title="Expand resources"
+                      className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+                      aria-label={`${Object.keys(resources || {}).length > 0 && Object.keys(resources || {}).every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`)) ? "Collapse" : "Expand"} children of ${fourCC}`}
+                      title="Toggle child resources"
                     >
-                      + children
-                    </Button>
-                    <Button
-                      onClick={(event) => { event.stopPropagation(); collapseCodeChildren(fourCC); }}
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs text-gray-400 hover:text-white"
-                      aria-label={`Collapse children of ${fourCC}`}
-                      title="Collapse resources"
-                    >
-                      − children
+                      {Object.keys(resources || {}).length > 0 && Object.keys(resources || {}).every((resourceId) => expandedResources.has(`${fourCC}-${resourceId}`)) ? <ChevronsUp className="h-4 w-4" /> : <ChevronsDown className="h-4 w-4" />}
                     </Button>
                   </div>
                   </>
-                )}
-                {!readOnly && editingFourCC !== fourCC && (
-                  <Button
-                    onClick={() => {
-                      setEditingFourCC(fourCC);
-                      setFourCCDraft(fourCC);
-                      setFourCCError("");
-                    }}
-                    size="sm"
-                    variant="ghost"
-                    className="mr-2 h-8 px-2 text-gray-400 hover:text-white"
-                    aria-label={`Edit four-letter code ${fourCC}`}
-                    title="Edit four-letter code"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
                 )}
               </div>
 
@@ -869,9 +862,24 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                         </button>
 
                         {isExpanded && resource.obj && (
-                          <div className="flex items-center justify-end gap-1 border-t border-gray-700/40 px-3 py-1">
-                            <Button onClick={() => expandResourceChildren(fourCC, resourceId, resource)} size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-gray-400 hover:text-white" aria-label={`Expand fields in ${fourCC} resource ${resourceId}`}>+ fields</Button>
-                            <Button onClick={() => collapseResourceChildren(fourCC, resourceId, resource)} size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-gray-400 hover:text-white" aria-label={`Collapse fields in ${fourCC} resource ${resourceId}`}>− fields</Button>
+                          <div className="flex items-center justify-end border-t border-gray-700/40 px-3 py-1">
+                            {(() => {
+                              const childKeys = expandableNodeKeys(resource.obj, resourceKey);
+                              const allExpanded = childKeys.length > 0 && childKeys.every((key) => expandedNodes.has(key));
+                              return (
+                                <Button
+                                  onClick={() => allExpanded ? collapseResourceChildren(fourCC, resourceId, resource) : expandResourceChildren(fourCC, resourceId, resource)}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+                                  aria-label={`${allExpanded ? "Collapse" : "Expand"} fields in ${fourCC} resource ${resourceId}`}
+                                  title="Toggle child fields"
+                                  disabled={childKeys.length === 0}
+                                >
+                                  {allExpanded ? <ChevronsUp className="h-4 w-4" /> : <ChevronsDown className="h-4 w-4" />}
+                                </Button>
+                              );
+                            })()}
                           </div>
                         )}
 
