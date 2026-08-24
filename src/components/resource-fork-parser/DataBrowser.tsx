@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
@@ -195,6 +195,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   const [fourCCDraft, setFourCCDraft] = useState("");
   const [fourCCError, setFourCCError] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ fourCC: string; resourceId: string } | null>(null);
+  const bulkExpansionVersion = useRef(0);
 
   // Extract four-letter codes and their resources
   const fourLetterCodes = useMemo(() => {
@@ -209,6 +210,38 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       }))
       .filter(item => !filterFourCC || item.fourCC.toLowerCase().includes(filterFourCC.toLowerCase()));
   }, [data, filterFourCC]);
+
+  // Serializing decoded resources is relatively expensive, especially for the
+  // large classic-game forks. Build the search text once per data snapshot so
+  // typing only performs string matching and filtering.
+  const searchableResourcesRef = useRef<{ data: Record<string, unknown>; index: Map<string, string> } | null>(null);
+  const expandableKeysRef = useRef<{ data: Record<string, unknown>; keys: Map<string, string[]> } | null>(null);
+
+  if (searchableResourcesRef.current?.data !== data) searchableResourcesRef.current = null;
+  if (expandableKeysRef.current?.data !== data) expandableKeysRef.current = { data, keys: new Map() };
+
+  const searchableResources = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    if (!searchableResourcesRef.current) {
+      const index = new Map<string, string>();
+      Object.entries(data || {}).forEach(([fourCC, resources]) => {
+        if (!resources || typeof resources !== "object") return;
+        Object.entries(resources as Record<string, ResourceEntry>).forEach(([resourceId, resource]) => {
+          index.set(`${fourCC}-${resourceId}`, `${resourceId} ${JSON.stringify(resource)}`.toLowerCase());
+        });
+      });
+      searchableResourcesRef.current = { data, index };
+    }
+    return searchableResourcesRef.current.index;
+  }, [data, searchQuery]);
+
+  const getExpandableKeys = useCallback((resourceKey: string, resource?: ResourceEntry) => {
+    const cached = expandableKeysRef.current?.keys.get(resourceKey);
+    if (cached) return cached;
+    const keys = resource?.obj ? expandableNodeKeys(resource.obj, resourceKey) : [];
+    expandableKeysRef.current?.keys.set(resourceKey, keys);
+    return keys;
+  }, []);
 
   // Filter resources based on search query
   const filteredData = useMemo(() => {
@@ -226,8 +259,8 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       const filteredResources: Record<string, ResourceEntry> = {};
       
       Object.entries(resources || {}).forEach(([resourceId, resource]) => {
-        const resourceStr = JSON.stringify(resource).toLowerCase();
-        if (resourceStr.includes(query) || resourceId.includes(query)) {
+        const resourceStr = searchableResources?.get(`${fourCC}-${resourceId}`) ?? "";
+        if (resourceStr.includes(query)) {
           filteredResources[resourceId] = resource;
         }
       });
@@ -242,10 +275,14 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
 
       return null;
     }).filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [fourLetterCodes, searchQuery]);
+  }, [fourLetterCodes, searchableResources, searchQuery]);
 
   const searchMatchCount = useMemo(() => filteredData.reduce((count, item) => count + item.resourceCount, 0), [filteredData]);
   const selectedResourceEntry = selectedResource ? (data[selectedResource.fourCC] as Record<string, ResourceEntry> | undefined)?.[selectedResource.resourceId] : undefined;
+  const selectedResourceJson = useMemo(
+    () => selectedResourceEntry?.obj ? JSON.stringify(selectedResourceEntry.obj, null, 2) : null,
+    [selectedResourceEntry],
+  );
 
   // Search results are useful only when the matching resource is visible. Keep
   // the tree open while searching so users do not have to expand every level.
@@ -262,27 +299,38 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   }, [filteredData, searchQuery]);
 
   const expandCodeChildren = useCallback((fourCC: string, resourceIds: string[]) => {
+    const version = ++bulkExpansionVersion.current;
     setExpandedCodes((current) => new Set([...current, fourCC]));
-    setExpandedResources((current) => new Set([...current, ...resourceIds.map((resourceId) => `${fourCC}-${resourceId}`)]));
+    const chunkSize = 2;
+    const addChunk = (offset: number) => {
+      if (bulkExpansionVersion.current !== version) return;
+      const chunk = resourceIds.slice(offset, offset + chunkSize).map((resourceId) => `${fourCC}-${resourceId}`);
+      setExpandedResources((current) => new Set([...current, ...chunk]));
+      if (offset + chunkSize < resourceIds.length) {
+        window.setTimeout(() => addChunk(offset + chunkSize), 0);
+      }
+    };
+    addChunk(0);
   }, []);
 
   const collapseCodeChildren = useCallback((fourCC: string) => {
+    bulkExpansionVersion.current += 1;
     setExpandedResources((current) => new Set([...current].filter((key) => !key.startsWith(`${fourCC}-`))));
   }, []);
 
   const expandResourceChildren = useCallback((fourCC: string, resourceId: string, resource: ResourceEntry) => {
     const resourceKey = `${fourCC}-${resourceId}`;
-    const keys = resource.obj ? expandableNodeKeys(resource.obj, resourceKey) : [];
+    const keys = getExpandableKeys(resourceKey, resource);
     setExpandedResources((current) => new Set([...current, resourceKey]));
     setExpandedCodes((current) => new Set([...current, fourCC]));
     setExpandedNodes((current) => new Set([...current, ...keys]));
-  }, []);
+  }, [getExpandableKeys]);
 
   const collapseResourceChildren = useCallback((fourCC: string, resourceId: string, resource: ResourceEntry) => {
     const resourceKey = `${fourCC}-${resourceId}`;
-    const keys = resource.obj ? expandableNodeKeys(resource.obj, resourceKey) : [];
+    const keys = getExpandableKeys(resourceKey, resource);
     setExpandedNodes((current) => new Set([...current].filter((key) => !keys.includes(key))));
-  }, []);
+  }, [getExpandableKeys]);
 
   const saveFourCC = useCallback(() => {
     if (!editingFourCC || !onFourCCChange) return;
@@ -720,6 +768,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
               key={fourCC}
               open={expandedCodes.has(fourCC)}
               onOpenChange={(open) => setExpandedCodes((current) => {
+                if (!open) bulkExpansionVersion.current += 1;
                 const next = new Set(current);
                 if (open) next.add(fourCC); else next.delete(fourCC);
                 return next;
@@ -871,7 +920,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                         {resource.obj && (
                           <div className="flex items-center justify-end border-t border-gray-700/40 px-3 py-1">
                             {(() => {
-                              const childKeys = expandableNodeKeys(resource.obj, resourceKey);
+                              const childKeys = getExpandableKeys(resourceKey, resource);
                               const allExpanded = childKeys.length > 0 && childKeys.every((key) => expandedNodes.has(key));
                               return (
                                 <Button
@@ -898,7 +947,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                               </div>
                             )}
 
-                            {resource.data && onResourceDataChange && (
+                            {resource.data && onResourceDataChange && selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId && (
                               <ResourceDataEditor
                                 fourCC={fourCC}
                                 resourceId={resourceId}
@@ -962,7 +1011,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
             <div className="space-y-4 p-4 text-sm">
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs"><dt className="text-gray-500">Name</dt><dd className="truncate text-gray-300">{selectedResourceEntry.name || "—"}</dd><dt className="text-gray-500">Order</dt><dd className="text-gray-300">{selectedResourceEntry.order ?? "—"}</dd><dt className="text-gray-500">Representation</dt><dd className="text-gray-300">{selectedResourceEntry.obj ? "Decoded fields" : "Raw bytes"}</dd></dl>
               {selectedResourceEntry.data && onResourceDataChange && <ResourceDataEditor fourCC={selectedResource.fourCC} resourceId={selectedResource.resourceId} hex={selectedResourceEntry.data} onChange={(hex) => onResourceDataChange(selectedResource.fourCC, selectedResource.resourceId, hex)} readOnly={readOnly} />}
-              {selectedResourceEntry.obj && <pre className="max-h-72 overflow-auto border border-gray-800 bg-gray-900 p-3 text-[11px] leading-5 text-gray-300">{JSON.stringify(selectedResourceEntry.obj, null, 2)}</pre>}
+              {selectedResourceJson && <pre className="max-h-72 overflow-auto border border-gray-800 bg-gray-900 p-3 text-[11px] leading-5 text-gray-300">{selectedResourceJson}</pre>}
               {selectedResourceEntry.conversionError && <p className="border border-red-900/70 bg-red-950/30 p-3 text-xs text-red-300">{selectedResourceEntry.conversionError}</p>}
             </div>
           </aside>

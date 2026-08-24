@@ -153,12 +153,13 @@ test.describe('Resource fork parser user journeys', () => {
       await toastClose.click({ force: true });
     }
 
-    const expandChildren = browser.getByRole('button', { name: /Expand children of/ }).first();
+    const expandChildren = browser.getByRole('button', { name: /children of Hedr/ });
     const tooltipId = await expandChildren.getAttribute('aria-describedby');
     expect(tooltipId).toBeTruthy();
     await expandChildren.click({ timeout: 30_000 });
     await expect(browser.getByText(/Resource #/).first()).toBeVisible();
     await waitForCollapsibleAnimations(page);
+    await expect(expandChildren).toHaveAccessibleName(/Collapse children of/, { timeout: 30_000 });
     await expandChildren.hover();
     await expect(page.locator(`#${tooltipId}`)).toHaveText('Collapse all child resources');
     await expect(page.locator(`#${tooltipId}`)).toHaveCSS('opacity', '1');
