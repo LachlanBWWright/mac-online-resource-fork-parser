@@ -232,9 +232,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   const bulkExpansionVersion = useRef(0);
   const dataWorkerRef = useRef<Worker | null>(null);
   const searchIndexRequestedFor = useRef<Record<string, unknown> | null>(null);
-  const inspectorRequestId = useRef(0);
   const [searchIndex, setSearchIndex] = useState<Record<string, string> | null>(null);
-  const [selectedResourceJson, setSelectedResourceJson] = useState<string | null>(null);
 
   // Extract four-letter codes and their resources
   const fourLetterCodes = useMemo(() => {
@@ -261,11 +259,8 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     const worker = new Worker(new URL("../../workers/data-browser.worker.ts", import.meta.url), { type: "module" });
     dataWorkerRef.current = worker;
     setSearchIndex(null);
-    worker.onmessage = (event: MessageEvent<{ type: string; index?: Record<string, string>; requestId?: number; value?: string | null }>) => {
+    worker.onmessage = (event: MessageEvent<{ type: string; index?: Record<string, string> }>) => {
       if (event.data.type === "search-index" && event.data.index) setSearchIndex(event.data.index);
-      if (event.data.type === "stringified" && event.data.requestId === inspectorRequestId.current) {
-        setSelectedResourceJson(event.data.value ?? null);
-      }
     };
     return () => {
       worker.terminate();
@@ -322,15 +317,6 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   }, [fourLetterCodes, searchIndex, searchQuery]);
 
   const searchMatchCount = useMemo(() => filteredData.reduce((count, item) => count + item.resourceCount, 0), [filteredData]);
-  const selectedResourceEntry = selectedResource ? (data[selectedResource.fourCC] as Record<string, ResourceEntry> | undefined)?.[selectedResource.resourceId] : undefined;
-  useEffect(() => {
-    if (!selectedResourceEntry?.obj || !dataWorkerRef.current) {
-      setSelectedResourceJson(null);
-      return;
-    }
-    const requestId = ++inspectorRequestId.current;
-    dataWorkerRef.current.postMessage({ type: "stringify", requestId, value: selectedResourceEntry.obj });
-  }, [selectedResourceEntry]);
 
   // Search results are useful only when the matching resource is visible. Keep
   // the tree open while searching so users do not have to expand every level.
@@ -652,7 +638,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
           return next;
         })} className="w-full">
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-1 font-mono text-sm text-yellow-400 transition-colors hover:text-yellow-300">
+            <button className="flex w-auto items-center justify-start gap-1 py-0 font-mono text-sm text-yellow-400 transition-colors hover:text-yellow-300">
               {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               Array ({value.length} items)
             </button>
@@ -689,7 +675,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
           return next;
         })} className="w-full">
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-1 font-mono text-sm text-purple-400 transition-colors hover:text-purple-300">
+            <button className="flex w-auto items-center justify-start gap-1 py-0 font-mono text-sm text-purple-400 transition-colors hover:text-purple-300">
               {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               Object ({entries.length} fields)
             </button>
@@ -809,7 +795,6 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
         )}
 
         {/* Data tree - expands freely, no max height */}
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-3">
           {filteredData.map(({ fourCC, resources, resourceCount }) => (
             <Collapsible
@@ -1031,23 +1016,6 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
               No results found for &quot;{searchQuery || filterFourCC}&quot;
             </div>
           )}
-        </div>
-        {selectedResource && selectedResourceEntry && (
-          <aside className="border border-gray-800 bg-gray-950/70 lg:sticky lg:top-4" aria-label="Resource inspector">
-            <div className="border-b border-gray-800 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div><p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">Resource inspector</p><h2 className="mt-1 font-mono text-lg text-white">{selectedResource.fourCC} / {selectedResource.resourceId}</h2></div>
-                <Button onClick={() => setSelectedResource(null)} size="sm" variant="ghost" className="h-7 px-2 text-gray-500 hover:text-white" aria-label="Close resource inspector"><X className="h-4 w-4" /></Button>
-              </div>
-            </div>
-            <div className="space-y-4 p-4 text-sm">
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs"><dt className="text-gray-500">Name</dt><dd className="truncate text-gray-300">{selectedResourceEntry.name || "—"}</dd><dt className="text-gray-500">Order</dt><dd className="text-gray-300">{selectedResourceEntry.order ?? "—"}</dd><dt className="text-gray-500">Representation</dt><dd className="text-gray-300">{selectedResourceEntry.obj ? "Decoded fields" : "Raw bytes"}</dd></dl>
-              {selectedResourceEntry.data && onResourceDataChange && <ResourceDataEditor fourCC={selectedResource.fourCC} resourceId={selectedResource.resourceId} hex={selectedResourceEntry.data} onChange={(hex) => onResourceDataChange(selectedResource.fourCC, selectedResource.resourceId, hex)} readOnly={readOnly} />}
-              {selectedResourceJson && <pre className="max-h-72 overflow-auto border border-gray-800 bg-gray-900 p-3 text-[11px] leading-5 text-gray-300">{selectedResourceJson}</pre>}
-              {selectedResourceEntry.conversionError && <p className="border border-red-900/70 bg-red-950/30 p-3 text-xs text-red-300">{selectedResourceEntry.conversionError}</p>}
-            </div>
-          </aside>
-        )}
         </div>
       </CardContent>
     </Card>

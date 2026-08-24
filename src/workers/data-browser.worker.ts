@@ -1,12 +1,10 @@
 type ResourceMap = Record<string, unknown>;
 
 type WorkerRequest =
-  | { type: "build-search-index"; data: ResourceMap }
-  | { type: "stringify"; requestId: number; value: unknown };
+  | { type: "build-search-index"; data: ResourceMap };
 
 type WorkerResponse =
-  | { type: "search-index"; index: Record<string, string> }
-  | { type: "stringified"; requestId: number; value: string | null };
+  | { type: "search-index"; index: Record<string, string> };
 
 const workerScope = self as unknown as {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
@@ -25,14 +23,5 @@ workerScope.onmessage = (event) => {
       });
     });
     workerScope.postMessage({ type: "search-index", index });
-    return;
   }
-
-  let value: string | null = null;
-  try {
-    value = JSON.stringify(request.value, null, 2) ?? null;
-  } catch {
-    value = null;
-  }
-  workerScope.postMessage({ type: "stringified", requestId: request.requestId, value });
 };

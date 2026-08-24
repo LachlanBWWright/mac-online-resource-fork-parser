@@ -4,7 +4,7 @@ const STORYBOOK_URL = "http://localhost:6006/mac-online-resource-fork-parser";
 
 const stories = [
   { id: "user-journeys-parser-application--empty-workspace", name: "app-empty" },
-  { id: "user-journeys-browse-data--search-expand-and-edit", name: "browser-search-edit", text: "Resource inspector" },
+  { id: "user-journeys-browse-data--search-expand-and-edit", name: "browser-search-edit", text: "Data Browser" },
   { id: "user-journeys-browse-data--full-resource-inventory", name: "browser-inventory" },
   { id: "user-journeys-resource-data-editors--ascii-text", name: "editor-text", text: "ASCII text editor" },
   { id: "user-journeys-resource-data-editors--monochrome-icon", name: "editor-icon", label: /Edit ICN# bitmap/ },
