@@ -54,6 +54,40 @@ interface ChangeRecord {
   after: unknown;
 }
 
+type RenderValue = (
+  value: unknown,
+  fourCC: string,
+  resourceId: string,
+  fieldPath: string,
+  depth?: number,
+) => React.ReactNode;
+
+const ResourceFieldRows = React.memo(function ResourceFieldRows({
+  obj,
+  fourCC,
+  resourceId,
+  renderValue,
+  changes,
+}: {
+  obj: Record<string, unknown>;
+  fourCC: string;
+  resourceId: string;
+  renderValue: RenderValue;
+  changes: Map<string, ChangeRecord>;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {Object.entries(obj).map(([field, value]) => (
+        <div key={field} className="flex items-start gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-gray-800/40">
+          <span className="min-w-[120px] flex-shrink-0 text-sm font-medium text-gray-300">{field}:</span>
+          <div className="min-w-0 flex-1">{renderValue(value, fourCC, resourceId, field)}</div>
+          {changes.has(`${fourCC}-${resourceId}-${field}`) && <Badge variant="secondary" className="text-[10px]">Edited</Badge>}
+        </div>
+      ))}
+    </div>
+  );
+});
+
 // Constants for validation and display
 const FOUR_LETTER_CODE_REGEX = /^[\x20-\x7e]{4}$/;
 const STRING_DISPLAY_MAX_LENGTH = 200;
@@ -196,6 +230,11 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   const [fourCCError, setFourCCError] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ fourCC: string; resourceId: string } | null>(null);
   const bulkExpansionVersion = useRef(0);
+  const dataWorkerRef = useRef<Worker | null>(null);
+  const searchIndexRequestedFor = useRef<Record<string, unknown> | null>(null);
+  const inspectorRequestId = useRef(0);
+  const [searchIndex, setSearchIndex] = useState<Record<string, string> | null>(null);
+  const [selectedResourceJson, setSelectedResourceJson] = useState<string | null>(null);
 
   // Extract four-letter codes and their resources
   const fourLetterCodes = useMemo(() => {
@@ -214,25 +253,30 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   // Serializing decoded resources is relatively expensive, especially for the
   // large classic-game forks. Build the search text once per data snapshot so
   // typing only performs string matching and filtering.
-  const searchableResourcesRef = useRef<{ data: Record<string, unknown>; index: Map<string, string> } | null>(null);
   const expandableKeysRef = useRef<{ data: Record<string, unknown>; keys: Map<string, string[]> } | null>(null);
 
-  if (searchableResourcesRef.current?.data !== data) searchableResourcesRef.current = null;
   if (expandableKeysRef.current?.data !== data) expandableKeysRef.current = { data, keys: new Map() };
 
-  const searchableResources = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    if (!searchableResourcesRef.current) {
-      const index = new Map<string, string>();
-      Object.entries(data || {}).forEach(([fourCC, resources]) => {
-        if (!resources || typeof resources !== "object") return;
-        Object.entries(resources as Record<string, ResourceEntry>).forEach(([resourceId, resource]) => {
-          index.set(`${fourCC}-${resourceId}`, `${resourceId} ${JSON.stringify(resource)}`.toLowerCase());
-        });
-      });
-      searchableResourcesRef.current = { data, index };
-    }
-    return searchableResourcesRef.current.index;
+  useEffect(() => {
+    const worker = new Worker(new URL("../../workers/data-browser.worker.ts", import.meta.url), { type: "module" });
+    dataWorkerRef.current = worker;
+    setSearchIndex(null);
+    worker.onmessage = (event: MessageEvent<{ type: string; index?: Record<string, string>; requestId?: number; value?: string | null }>) => {
+      if (event.data.type === "search-index" && event.data.index) setSearchIndex(event.data.index);
+      if (event.data.type === "stringified" && event.data.requestId === inspectorRequestId.current) {
+        setSelectedResourceJson(event.data.value ?? null);
+      }
+    };
+    return () => {
+      worker.terminate();
+      if (dataWorkerRef.current === worker) dataWorkerRef.current = null;
+    };
+  }, [data]);
+
+  useEffect(() => {
+    if (!searchQuery.trim() || !dataWorkerRef.current || searchIndexRequestedFor.current === data) return;
+    searchIndexRequestedFor.current = data;
+    dataWorkerRef.current.postMessage({ type: "build-search-index", data });
   }, [data, searchQuery]);
 
   const getExpandableKeys = useCallback((resourceKey: string, resource?: ResourceEntry) => {
@@ -259,7 +303,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       const filteredResources: Record<string, ResourceEntry> = {};
       
       Object.entries(resources || {}).forEach(([resourceId, resource]) => {
-        const resourceStr = searchableResources?.get(`${fourCC}-${resourceId}`) ?? "";
+        const resourceStr = searchIndex?.[`${fourCC}-${resourceId}`] ?? "";
         if (resourceStr.includes(query)) {
           filteredResources[resourceId] = resource;
         }
@@ -275,14 +319,18 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
 
       return null;
     }).filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [fourLetterCodes, searchableResources, searchQuery]);
+  }, [fourLetterCodes, searchIndex, searchQuery]);
 
   const searchMatchCount = useMemo(() => filteredData.reduce((count, item) => count + item.resourceCount, 0), [filteredData]);
   const selectedResourceEntry = selectedResource ? (data[selectedResource.fourCC] as Record<string, ResourceEntry> | undefined)?.[selectedResource.resourceId] : undefined;
-  const selectedResourceJson = useMemo(
-    () => selectedResourceEntry?.obj ? JSON.stringify(selectedResourceEntry.obj, null, 2) : null,
-    [selectedResourceEntry],
-  );
+  useEffect(() => {
+    if (!selectedResourceEntry?.obj || !dataWorkerRef.current) {
+      setSelectedResourceJson(null);
+      return;
+    }
+    const requestId = ++inspectorRequestId.current;
+    dataWorkerRef.current.postMessage({ type: "stringify", requestId, value: selectedResourceEntry.obj });
+  }, [selectedResourceEntry]);
 
   // Search results are useful only when the matching resource is visible. Keep
   // the tree open while searching so users do not have to expand every level.
@@ -957,23 +1005,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                               />
                             )}
 
-                            {resource.obj && (
-                              <div className="space-y-1.5">
-                                {Object.entries(resource.obj).map(([field, value]) => (
-                                  <div key={field} className="flex items-start gap-2 py-1.5 px-2 rounded-md hover:bg-gray-800/40 transition-colors">
-                                    <span className="text-gray-300 text-sm font-medium min-w-[120px] flex-shrink-0">
-                                      {field}:
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                      {renderValue(value, fourCC, resourceId, field)}
-                                    </div>
-                                    {changes.has(`${fourCC}-${resourceId}-${field}`) && (
-                                      <Badge variant="secondary" className="text-[10px]">Edited</Badge>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            {resource.obj && <ResourceFieldRows obj={resource.obj} fourCC={fourCC} resourceId={resourceId} renderValue={renderValue} changes={changes} />}
 
                             {resource.data && !resource.obj && !SPECIALIZED_DATA_EDITOR_TYPES.has(fourCC) && (
                               <div className="p-2 bg-gray-900/60 rounded-md border border-gray-700/40">
