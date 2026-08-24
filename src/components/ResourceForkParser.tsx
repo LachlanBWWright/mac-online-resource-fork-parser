@@ -1371,8 +1371,8 @@ export default function ResourceForkParser() {
             <>
               <div className="border-b border-gray-800/80 py-2">
                 <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "specs" | "data")}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex min-w-0 items-center gap-2 pr-1">
+                  <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+                    <div className="flex shrink-0 items-center gap-2 pr-1">
                       <FileText className="h-4 w-4 shrink-0 text-gray-400" />
                       <span className="max-w-[min(34vw,26rem)] truncate text-sm font-semibold text-white" title={fileName}>{fileName}</span>
                       {hasUnsavedChanges && <span className="shrink-0 text-[11px] text-yellow-400">modified</span>}
@@ -1388,7 +1388,7 @@ export default function ResourceForkParser() {
                       </Button>
                     </div>
 
-                    <TabsList className="h-8 bg-gray-800/80">
+                    <TabsList className="h-8 shrink-0 bg-gray-800/80">
                       <TabsTrigger value="specs" className="h-6 gap-1 px-2 text-xs sm:px-3 sm:text-sm">
                         <Settings className="h-3.5 w-3.5" />
                         Struct Specs
@@ -1399,8 +1399,8 @@ export default function ResourceForkParser() {
                       </TabsTrigger>
                     </TabsList>
 
-                    <div className="ml-auto flex flex-wrap items-center gap-1">
-                      <div className="mr-1 flex items-center gap-1 border-l border-gray-700 pl-2">
+                    <div className="ml-auto flex shrink-0 items-center gap-1 [&_button]:shrink-0">
+                      <div className="flex items-center gap-1">
                         {/* Spec management */}
                   <Input
                     type="file"
@@ -1430,7 +1430,7 @@ export default function ResourceForkParser() {
                   </Button>
                       </div>
 
-                      <div className="mr-1 flex items-center gap-1 border-l border-gray-700 pl-2">
+                      <div className="flex items-center gap-1">
                         {/* Export & Pack */}
                   <Button
                     onClick={downloadJson}
