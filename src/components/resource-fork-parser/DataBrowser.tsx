@@ -854,7 +854,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                     <button
                       data-testid={`resource-type-${fourCC}`}
                       aria-label={`${expandedCodes.has(fourCC) ? "Collapse" : "Expand"} resource type ${fourCC}`}
-                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-blue-500/10"
+                      className="flex min-w-0 flex-1 items-center justify-start gap-3 p-3 text-left transition-colors hover:bg-blue-500/10"
                     >
                       {expandedCodes.has(fourCC) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
                       <span className="font-mono text-lg font-semibold text-white">{fourCC}</span>
