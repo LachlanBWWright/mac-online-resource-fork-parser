@@ -1159,6 +1159,25 @@ export default function ResourceForkParser() {
     [parsedResult, info],
   );
 
+  const handleResourceNameChange = useCallback(
+    (fourCC: string, resourceId: string, name: string) => {
+      if (!parsedResult?.data) return;
+      const currentData = parsedResult.data as Record<string, Record<string, { name?: string }>>;
+      const resource = currentData[fourCC]?.[resourceId];
+      if (!resource) return;
+      setParsedResult({
+        ...parsedResult,
+        data: {
+          ...currentData,
+          [fourCC]: { ...currentData[fourCC], [resourceId]: { ...resource, name } },
+        },
+      });
+      setHasUnsavedChanges(true);
+      info({ title: "Resource name modified", description: `Updated ${fourCC}/${resourceId}. Use “Pack to RSRC” to save changes.` });
+    },
+    [parsedResult, info],
+  );
+
   // Pack edited data back to RSRC file
   const packToRsrc = useCallback(async () => {
     if (!parsedResult?.data) {
@@ -1593,6 +1612,7 @@ export default function ResourceForkParser() {
             data={browserData}
             onDataChange={handleDataChange}
             onResourceDataChange={handleResourceDataChange}
+            onResourceNameChange={handleResourceNameChange}
             onFourCCChange={(oldFourCC, nextFourCC) => {
               const index = fourLetterCodes.findIndex((spec) => spec.fourCC === oldFourCC);
               if (index !== -1) updateFourCC(index, nextFourCC);

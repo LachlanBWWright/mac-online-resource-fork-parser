@@ -25,6 +25,7 @@ interface DataBrowserProps {
   data: Record<string, unknown>;
   onDataChange?: (fourCC: string, resourceId: string, newData: Record<string, unknown>) => void;
   onResourceDataChange?: (fourCC: string, resourceId: string, hex: string) => void;
+  onResourceNameChange?: (fourCC: string, resourceId: string, name: string) => void;
   onFourCCChange?: (oldFourCC: string, newFourCC: string) => void;
   readOnly?: boolean;
 }
@@ -214,7 +215,7 @@ function expandableNodeKeys(value: unknown, baseKey: string): string[] {
   return [];
 }
 
-export default function DataBrowser({ data, onDataChange, onResourceDataChange, onFourCCChange, readOnly = false }: DataBrowserProps) {
+export default function DataBrowser({ data, onDataChange, onResourceDataChange, onResourceNameChange, onFourCCChange, readOnly = false }: DataBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
@@ -229,6 +230,8 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
   const [fourCCDraft, setFourCCDraft] = useState("");
   const [fourCCError, setFourCCError] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ fourCC: string; resourceId: string } | null>(null);
+  const [editingResourceName, setEditingResourceName] = useState<string | null>(null);
+  const [resourceNameDraft, setResourceNameDraft] = useState("");
   const bulkExpansionVersion = useRef(0);
   const dataWorkerRef = useRef<Worker | null>(null);
   const searchIndexRequestedFor = useRef<Record<string, unknown> | null>(null);
@@ -433,6 +436,41 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     setEditError("");
   }, [editState, editValue, onDataChange, data]);
 
+  const saveHexEdit = useCallback((nextHex: string) => {
+    if (!editState || !onDataChange) return;
+    const currentResources = data[editState.fourCC] as Record<string, ResourceEntry>;
+    const currentResource = currentResources?.[editState.resourceId];
+    if (!currentResource?.obj) return;
+    const newObj = deepSet(currentResource.obj, editState.fieldPath, nextHex);
+    onDataChange(editState.fourCC, editState.resourceId, newObj);
+    const changeKey = `${editState.fourCC}-${editState.resourceId}-${editState.fieldPath}`;
+    setChanges((current) => {
+      const next = new Map(current);
+      const existing = next.get(changeKey);
+      next.set(changeKey, {
+        fourCC: editState.fourCC,
+        resourceId: editState.resourceId,
+        fieldPath: editState.fieldPath,
+        before: existing?.before ?? editState.originalValue,
+        after: nextHex,
+      });
+      return next;
+    });
+    cancelEdit();
+  }, [cancelEdit, data, editState, onDataChange]);
+
+  const startResourceNameEdit = useCallback((fourCC: string, resourceId: string, name?: string) => {
+    setEditingResourceName(`${fourCC}-${resourceId}`);
+    setResourceNameDraft(name ?? "");
+  }, []);
+
+  const saveResourceName = useCallback((fourCC: string, resourceId: string) => {
+    if (!onResourceNameChange) return;
+    onResourceNameChange(fourCC, resourceId, resourceNameDraft.trim());
+    setEditingResourceName(null);
+    setResourceNameDraft("");
+  }, [onResourceNameChange, resourceNameDraft]);
+
   const revertChange = useCallback((change: ChangeRecord) => {
     const resources = data[change.fourCC] as Record<string, ResourceEntry>;
     const resource = resources?.[change.resourceId];
@@ -468,6 +506,16 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                       editState?.fieldPath === fieldPath;
 
     if (isEditing) {
+      const isHexData = editState.originalType === "string" && /^[0-9a-fA-F]{4,}$/.test(editValue) && editValue.length % 2 === 0;
+      if (isHexData) {
+        return <ResourceDataEditor
+          fourCC={fieldPath}
+          resourceId={resourceId}
+          hex={editValue}
+          onChange={saveHexEdit}
+          readOnly={readOnly}
+        />;
+      }
       const isMultiline = editState.originalType === "object" || editState.originalType === "array";
       return (
         <div className="flex flex-col gap-1 w-full">
@@ -697,7 +745,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     }
 
     return <span className="text-gray-400">{String(value)}</span>;
-  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes]);
+  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, saveHexEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes]);
 
   const totalResources = useMemo(() => {
     return filteredData.reduce((sum, item) => sum + item.resourceCount, 0);
@@ -922,11 +970,12 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                           return next;
                         });
                       }} className={`border-b border-gray-800 last:border-b-0 ${selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId ? "bg-blue-500/10" : "bg-gray-900/40"}`}>
-                        <CollapsibleTrigger asChild>
+                        <div className="flex items-center">
+                          <CollapsibleTrigger asChild>
                           <button
                             data-testid={`resource-${fourCC}-${resourceId}`}
                             aria-label={`${isExpanded ? "Collapse" : "Expand"} resource ${resourceId}`}
-                            className="flex w-full items-center justify-between px-2 py-2 text-left transition-colors hover:bg-gray-700/30"
+                            className="flex min-w-0 flex-1 items-center justify-between px-2 py-2 text-left transition-colors hover:bg-gray-700/30"
                           >
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
@@ -947,7 +996,47 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
                               <Badge variant="destructive" className="text-xs">Error</Badge>
                             )}
                           </button>
-                        </CollapsibleTrigger>
+                          </CollapsibleTrigger>
+                          {!readOnly && onResourceNameChange && (
+                            <Button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                startResourceNameEdit(fourCC, resourceId, resource.name);
+                              }}
+                              size="sm"
+                              variant="ghost"
+                              className="mr-1 h-8 w-8 shrink-0 p-0 text-gray-400 hover:text-white"
+                              aria-label={`Edit resource name ${resourceId}`}
+                              data-testid={`edit-resource-name-${fourCC}-${resourceId}`}
+                              title="Edit resource name"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+
+                        {!readOnly && onResourceNameChange && editingResourceName === resourceKey && (
+                          <div className="flex items-center gap-2 border-t border-gray-700/40 px-3 py-2">
+                            <Input
+                              value={resourceNameDraft}
+                              onChange={(event) => setResourceNameDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") saveResourceName(fourCC, resourceId);
+                                if (event.key === "Escape") setEditingResourceName(null);
+                              }}
+                              aria-label={`Resource name for ${fourCC} ${resourceId}`}
+                              placeholder="Resource name"
+                              autoFocus
+                              className="h-8 max-w-sm text-sm"
+                            />
+                            <Button onClick={() => saveResourceName(fourCC, resourceId)} size="sm" className="h-8 bg-green-600 px-2 hover:bg-green-700" aria-label={`Save resource name ${resourceId}`}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button onClick={() => setEditingResourceName(null)} size="sm" variant="ghost" className="h-8 px-2" aria-label={`Cancel resource name ${resourceId}`}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
 
                         <CollapsibleContent className="[&>div]:pb-0">
                         {resource.obj && (

@@ -212,6 +212,34 @@ test.describe('Resource fork parser user journeys', () => {
     await expect(page.getByText('modified').first()).toBeVisible();
   });
 
+  test('opens the hex editor for decoded hexadecimal fields and renames resources', async ({ page }) => {
+    await loadSampleWithSpecs(page);
+    await page.getByRole('tab', { name: /Browse Data/ }).click();
+    const browser = page.getByTestId('data-browser');
+    await expect(browser).toBeVisible({ timeout: 30_000 });
+
+    const search = browser.getByPlaceholder('Search fields, values, IDs…');
+    await search.fill('alias_data');
+    await browser.getByRole('button', { name: /Expand fields in alis resource/ }).first().click();
+    await browser.getByText('Object (1 fields)', { exact: true }).first().click();
+    const aliasField = browser.getByText('alias_data:', { exact: true }).first();
+    await expect(aliasField).toBeVisible({ timeout: 30_000 });
+    await browser.getByRole('button', { name: /Edit .*alias_data/ }).first().click();
+    const fieldEditor = browser.getByTestId('hex-editor');
+    await expect(fieldEditor).toBeVisible();
+    await expect(fieldEditor.getByTestId('hex-byte-0')).toBeVisible();
+
+    const hedreType = browser.getByTestId('resource-type-Hedr');
+    await search.fill('');
+    await hedreType.click();
+    const resource = browser.getByTestId('resource-Hedr-1000');
+    await browser.getByTestId('edit-resource-name-Hedr-1000').click();
+    const nameInput = browser.getByRole('textbox', { name: 'Resource name for Hedr 1000' });
+    await nameInput.fill('Renamed header');
+    await browser.getByRole('button', { name: 'Save resource name 1000' }).click();
+    await expect(resource.getByText('(Renamed header)', { exact: true })).toBeVisible();
+  });
+
   test('exports JSON, TypeScript, specifications, and the packed resource fork', async ({ page }) => {
     await loadSampleWithSpecs(page);
 
