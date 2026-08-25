@@ -221,6 +221,24 @@ const SAMPLE_DEFINITIONS: SampleDefinition[] = [
     source: "Glider 4.0",
     category: "Projects",
   },
+  {
+    id: "glider-pro-empty-house",
+    name: "Glider PRO — Empty House",
+    filename: "glider-pro-empty-house.rsrc",
+    path: "/test-files/opensource/classic-games/glider-pro-empty-house.rsrc",
+    description: "The Empty House resource fork from the open-source Glider PRO project, including its classic Mac icon resources.",
+    source: "SoftDorothy / GliderPRO",
+    category: "Game data",
+  },
+  {
+    id: "pararena2-para-sounds",
+    name: "Pararena 2 — Para Sounds",
+    filename: "pararena2-para-sounds.rsrc",
+    path: "/test-files/opensource/classic-games/pararena2-para-sounds.rsrc",
+    description: "The Para Sounds resource fork from the open-source Pararena 2 project, containing nine SMSD sound resources.",
+    source: "SoftDorothy / Pararena2",
+    category: "Game data",
+  },
 ];
 
 const DATA_TYPE_OPTIONS: DataTypeOption[] = [

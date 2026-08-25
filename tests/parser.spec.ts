@@ -24,6 +24,8 @@ const additionalFixtures = [
   'pangea/billy-frontier-town-shootout.rsrc',
   'pangea/bugdom2-level1-garden.rsrc',
   'pangea/cromag-stoneage-jungle.rsrc',
+  'classic-games/glider-pro-empty-house.rsrc',
+  'classic-games/pararena2-para-sounds.rsrc',
 ].map((filename) => ({
   filename: filename.slice(filename.lastIndexOf('/') + 1),
   path: path.resolve(`public/test-files/opensource/${filename}`),
