@@ -18,6 +18,12 @@ const additionalFixtures = [
   'glider/Glider-BW-Art.rsrc',
   'glider/Glider-Color-Art.rsrc',
   'glider/Glider-Project.rsrc',
+  'pangea/nanosaur-deinon-skeleton.rsrc',
+  'pangea/bugdom-lawn.rsrc',
+  'pangea/nanosaur2-level1.rsrc',
+  'pangea/billy-frontier-town-shootout.rsrc',
+  'pangea/bugdom2-level1-garden.rsrc',
+  'pangea/cromag-stoneage-jungle.rsrc',
 ].map((filename) => ({
   filename: filename.slice(filename.lastIndexOf('/') + 1),
   path: path.resolve(`public/test-files/opensource/${filename}`),
