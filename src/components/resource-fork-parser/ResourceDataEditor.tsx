@@ -29,11 +29,34 @@ function printableByte(byte: number) {
   return byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : ".";
 }
 
+function BinaryImport({ accept = "*/*", label, onFile }: { accept?: string; label: string; onFile: (file: File) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return <>
+    <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()}>{label}</Button>
+    <input ref={inputRef} type="file" accept={accept} className="hidden" aria-label={label} onChange={(event) => {
+      const file = event.target.files?.[0];
+      if (file) onFile(file);
+      event.target.value = "";
+    }} />
+  </>;
+}
+
 function HexEditor({ fourCC, resourceId, hex, onChange, readOnly }: Props) {
   const [draft, setDraft] = useState(hex);
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
   const [cellDrafts, setCellDrafts] = useState<Record<number, string>>({});
+
+  const importBinary = async (file: File) => {
+    try {
+      setDraft(hexFromBytes(new Uint8Array(await file.arrayBuffer())));
+      setPage(0);
+      setCellDrafts({});
+      setError("");
+    } catch {
+      setError("Could not read that binary file");
+    }
+  };
 
   useEffect(() => {
     setDraft(hex);
@@ -95,6 +118,7 @@ function HexEditor({ fourCC, resourceId, hex, onChange, readOnly }: Props) {
         <span className="text-xs text-gray-500">Page {Math.min(page + 1, pageCount)} of {pageCount}</span>
         <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
         <Button size="sm" variant="outline" disabled={page >= pageCount - 1} onClick={() => setPage((current) => current + 1)}>Next</Button>
+        {!readOnly && <BinaryImport label="Import binary" onFile={importBinary} />}
         {!readOnly && <Button size="sm" onClick={commit}>Apply changes</Button>}
       </div>
     </div>
@@ -221,6 +245,53 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
     catch (caught) { setError(caught instanceof Error ? caught.message : "Invalid data"); }
   };
 
+  const importBinary = async (file: File) => {
+    try {
+      setDraft(hexFromBytes(new Uint8Array(await file.arrayBuffer())));
+      setError("");
+    } catch {
+      setError("Could not read that binary file");
+    }
+  };
+
+  const importIconImage = async (file: File) => {
+    if (!dimensions) return;
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = dimensions.width;
+      canvas.height = dimensions.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is unavailable");
+      context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
+      const pixels = context.getImageData(0, 0, dimensions.width, dimensions.height).data;
+      const monochrome = fourCC.endsWith("#");
+      const rowBytes = monochrome ? Math.ceil(dimensions.width / 8) : fourCC.endsWith("4") ? dimensions.width / 2 : dimensions.width;
+      const data = new Uint8Array(rowBytes * dimensions.height * (monochrome ? 2 : 1));
+      for (let y = 0; y < dimensions.height; y++) for (let x = 0; x < dimensions.width; x++) {
+        const pixel = (y * dimensions.width + x) * 4;
+        const luminance = Math.round((pixels[pixel] * 0.299) + (pixels[pixel + 1] * 0.587) + (pixels[pixel + 2] * 0.114));
+        const alpha = pixels[pixel + 3];
+        const offset = y * rowBytes + (monochrome ? Math.floor(x / 8) : fourCC.endsWith("4") ? Math.floor(x / 2) : x);
+        if (monochrome) {
+          if (luminance >= 128) data[offset] |= 1 << (7 - (x % 8));
+          if (alpha >= 128) data[rowBytes * dimensions.height + offset] |= 1 << (7 - (x % 8));
+        } else if (fourCC.endsWith("4")) {
+          data[offset] |= (luminance >> 4) << (x % 2 === 0 ? 4 : 0);
+        } else data[offset] = luminance;
+      }
+      setDraft(hexFromBytes(data));
+      setError("");
+    } catch {
+      setError("Could not decode that image. Choose a PNG, JPEG, or other browser-supported image.");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const editPixel = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (readOnly || !bytes || !dimensions) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -290,7 +361,7 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
   }
 
   if (isPict) return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-gray-300">QuickDraw picture renderer/editor</div><span className="text-xs text-gray-500">{fourCC} · #{resourceId}</span></div><div className="flex items-center gap-1"><span className="mr-1 text-xs text-gray-500">Zoom</span>{[1, 2, 4].map((zoom) => <Button key={zoom} size="sm" variant={pictZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setPictZoom(zoom)}>{zoom}×</Button>)}<Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportPictPng}>Export PNG</Button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-gray-300">QuickDraw picture renderer/editor</div><span className="text-xs text-gray-500">{fourCC} · #{resourceId}</span></div><div className="flex items-center gap-1"><span className="mr-1 text-xs text-gray-500">Zoom</span>{[1, 2, 4].map((zoom) => <Button key={zoom} size="sm" variant={pictZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setPictZoom(zoom)}>{zoom}×</Button>)}{!readOnly && <BinaryImport label="Import PICT" accept=".pict,.pct,application/octet-stream" onFile={importBinary} />}<Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportPictPng}>Export PNG</Button></div></div>
     <div className="overflow-auto border border-gray-600 bg-[linear-gradient(45deg,#1f2937_25%,transparent_25%),linear-gradient(-45deg,#1f2937_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1f2937_75%),linear-gradient(-45deg,transparent_75%,#1f2937_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0] p-3">
       <canvas ref={pictCanvasRef} onClick={inspectPictPixel} aria-label={`Rendered QuickDraw picture ${fourCC} ${resourceId}`} className="h-auto max-w-full cursor-crosshair" style={{ imageRendering: "pixelated", width: `${pictZoom * 100}%` }} />
     </div>
@@ -300,7 +371,7 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
   </div>;
 
   if (isIcon) return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div><span className="text-xs font-semibold uppercase tracking-wide text-gray-300">Bitmap icon editor</span><span className="ml-2 text-xs text-gray-500">{dimensions?.width}×{dimensions?.height} · {fourCC}</span></div><div className="flex items-center gap-1"><span className="text-xs text-gray-500">Zoom</span>{[4, 8, 12].map((zoom) => <Button key={zoom} size="sm" variant={iconZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconZoom(zoom)}>{zoom}×</Button>)}<Button size="sm" variant={iconGrid ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconGrid((current) => !current)}>Grid</Button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><span className="text-xs font-semibold uppercase tracking-wide text-gray-300">Bitmap icon editor</span><span className="ml-2 text-xs text-gray-500">{dimensions?.width}×{dimensions?.height} · {fourCC}</span></div><div className="flex items-center gap-1"><span className="text-xs text-gray-500">Zoom</span>{[4, 8, 12].map((zoom) => <Button key={zoom} size="sm" variant={iconZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconZoom(zoom)}>{zoom}×</Button>)}<Button size="sm" variant={iconGrid ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconGrid((current) => !current)}>Grid</Button>{!readOnly && <BinaryImport label="Import binary" onFile={importBinary} />} {!readOnly && <BinaryImport label="Import image" accept="image/*" onFile={importIconImage} />}</div></div>
     <canvas ref={canvasRef} onClick={editPixel} aria-label={`Edit ${fourCC} bitmap ${resourceId}`} className="h-auto max-w-full cursor-crosshair border border-gray-600 bg-gray-950" />
     {!readOnly && <p className="text-xs text-gray-500">Click pixels to toggle monochrome values or cycle indexed color values.</p>}
     <div className="flex gap-2"><Input aria-label={`Hex data for ${fourCC} ${resourceId}`} value={draft} readOnly={readOnly} onChange={(event) => setDraft(event.target.value)} className="font-mono text-xs" />{!readOnly && <Button size="sm" onClick={() => commit(draft)}>Apply hex</Button>}</div>

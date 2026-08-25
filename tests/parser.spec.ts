@@ -215,6 +215,13 @@ test.describe('Resource fork parser user journeys', () => {
     const firstByte = editor.getByTestId('hex-byte-0');
     await firstByte.fill('FF');
     await expect(firstByte).toHaveValue('FF');
+    await editor.getByLabel('Import binary').setInputFiles({
+      name: 'replacement.bin',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from([0xde, 0xad, 0xbe, 0xef]),
+    });
+    await expect(editor.getByTestId('hex-byte-0')).toHaveValue('DE');
+    await expect(editor.getByTestId('hex-byte-3')).toHaveValue('EF');
     await editor.getByRole('button', { name: 'Apply changes' }).click();
     await expect(page.getByText('Resource bytes modified')).toBeVisible();
     await expect(page.getByText('modified').first()).toBeVisible();
