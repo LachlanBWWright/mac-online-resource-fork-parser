@@ -92,17 +92,35 @@ export default function DataTypeFieldRow({
           ) : isPaddingType ? (
             <span className="text-gray-500 italic">No field name (padding)</span>
           ) : (
-            <Input
-              value={dataType.description}
-              onChange={(e) =>
-                updateDataType(specIndex, dataType.id, {
-                  description: e.target.value,
-                })
-              }
-              aria-label={`Field name for ${dataType.description || dataType.id}`}
-              className="w-48 bg-gray-700 border-gray-600 text-white"
-              placeholder="Field description"
-            />
+            <div className="space-y-1.5">
+              <Input
+                value={dataType.description}
+                onChange={(e) =>
+                  updateDataType(specIndex, dataType.id, {
+                    description: e.target.value,
+                  })
+                }
+                aria-label={`Field name for ${dataType.description || dataType.id}`}
+                className="w-48 bg-gray-700 border-gray-600 text-white"
+                placeholder="Field description"
+              />
+              <Select
+                value={dataType.preview ?? "none"}
+                onValueChange={(value: NonNullable<DataTypeField["preview"]>) =>
+                  updateDataType(specIndex, dataType.id, { preview: value })
+                }
+              >
+                <SelectTrigger aria-label={`Preview format for ${dataType.description || dataType.id}`} className="h-7 w-48 bg-gray-800 text-xs text-gray-300">
+                  <SelectValue placeholder="No preview" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700 border-gray-600">
+                  <SelectItem value="none" className="text-white">No preview</SelectItem>
+                  <SelectItem value="hex" className="text-white">Hex editor</SelectItem>
+                  <SelectItem value="pict" className="text-white">QuickDraw PICT</SelectItem>
+                  <SelectItem value="icon" className="text-white">Monochrome icon</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </TableCell>
         <TableCell>

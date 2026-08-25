@@ -23,6 +23,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/colla
 
 interface DataBrowserProps {
   data: Record<string, unknown>;
+  fieldPreviewHints?: Record<string, "hex" | "pict" | "icon">;
   onDataChange?: (fourCC: string, resourceId: string, newData: Record<string, unknown>) => void;
   onResourceDataChange?: (fourCC: string, resourceId: string, hex: string) => void;
   onResourceNameChange?: (fourCC: string, resourceId: string, name: string) => void;
@@ -215,7 +216,7 @@ function expandableNodeKeys(value: unknown, baseKey: string): string[] {
   return [];
 }
 
-export default function DataBrowser({ data, onDataChange, onResourceDataChange, onResourceNameChange, onFourCCChange, readOnly = false }: DataBrowserProps) {
+export default function DataBrowser({ data, fieldPreviewHints = {}, onDataChange, onResourceDataChange, onResourceNameChange, onFourCCChange, readOnly = false }: DataBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
@@ -401,6 +402,21 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     setEditError("");
   }, []);
 
+  const saveFieldValue = useCallback((fourCC: string, resourceId: string, fieldPath: string, originalValue: unknown, nextValue: unknown) => {
+    if (!onDataChange) return;
+    const currentResources = data[fourCC] as Record<string, ResourceEntry>;
+    const currentResource = currentResources?.[resourceId];
+    if (!currentResource?.obj) return;
+    onDataChange(fourCC, resourceId, deepSet(currentResource.obj, fieldPath, nextValue));
+    const changeKey = `${fourCC}-${resourceId}-${fieldPath}`;
+    setChanges((current) => {
+      const next = new Map(current);
+      const existing = next.get(changeKey);
+      next.set(changeKey, { fourCC, resourceId, fieldPath, before: existing?.before ?? originalValue, after: nextValue });
+      return next;
+    });
+  }, [data, onDataChange]);
+
   const saveEdit = useCallback(() => {
     if (!editState || !onDataChange) return;
 
@@ -410,54 +426,18 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
       return;
     }
 
-    const currentResources = data[editState.fourCC] as Record<string, ResourceEntry>;
-    const currentResource = currentResources?.[editState.resourceId];
-    
-    if (currentResource?.obj) {
-      const newObj = deepSet(currentResource.obj, editState.fieldPath, parsedValue);
-      onDataChange(editState.fourCC, editState.resourceId, newObj);
-      const changeKey = `${editState.fourCC}-${editState.resourceId}-${editState.fieldPath}`;
-      setChanges((current) => {
-        const next = new Map(current);
-        const existing = next.get(changeKey);
-        next.set(changeKey, {
-          fourCC: editState.fourCC,
-          resourceId: editState.resourceId,
-          fieldPath: editState.fieldPath,
-          before: existing?.before ?? editState.originalValue,
-          after: parsedValue,
-        });
-        return next;
-      });
-    }
+    saveFieldValue(editState.fourCC, editState.resourceId, editState.fieldPath, editState.originalValue, parsedValue);
 
     setEditState(null);
     setEditValue("");
     setEditError("");
-  }, [editState, editValue, onDataChange, data]);
+  }, [editState, editValue, onDataChange, saveFieldValue]);
 
   const saveHexEdit = useCallback((nextHex: string) => {
     if (!editState || !onDataChange) return;
-    const currentResources = data[editState.fourCC] as Record<string, ResourceEntry>;
-    const currentResource = currentResources?.[editState.resourceId];
-    if (!currentResource?.obj) return;
-    const newObj = deepSet(currentResource.obj, editState.fieldPath, nextHex);
-    onDataChange(editState.fourCC, editState.resourceId, newObj);
-    const changeKey = `${editState.fourCC}-${editState.resourceId}-${editState.fieldPath}`;
-    setChanges((current) => {
-      const next = new Map(current);
-      const existing = next.get(changeKey);
-      next.set(changeKey, {
-        fourCC: editState.fourCC,
-        resourceId: editState.resourceId,
-        fieldPath: editState.fieldPath,
-        before: existing?.before ?? editState.originalValue,
-        after: nextHex,
-      });
-      return next;
-    });
+    saveFieldValue(editState.fourCC, editState.resourceId, editState.fieldPath, editState.originalValue, nextHex);
     cancelEdit();
-  }, [cancelEdit, data, editState, onDataChange]);
+  }, [cancelEdit, editState, onDataChange, saveFieldValue]);
 
   const startResourceNameEdit = useCallback((fourCC: string, resourceId: string, name?: string) => {
     setEditingResourceName(`${fourCC}-${resourceId}`);
@@ -501,15 +481,17 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     depth: number = 0
   ): React.ReactNode => {
     const fieldKey = `${fourCC}-${resourceId}-${fieldPath}`;
+    const fieldName = fieldPath.match(/(?:^|\.)([^.[\]]+)$/)?.[1] ?? fieldPath;
+    const previewHint = fieldPreviewHints[`${fourCC}:${fieldName}`];
     const isEditing = editState?.fourCC === fourCC && 
                       editState?.resourceId === resourceId && 
                       editState?.fieldPath === fieldPath;
 
     if (isEditing) {
       const isHexData = editState.originalType === "string" && /^[0-9a-fA-F]{4,}$/.test(editValue) && editValue.length % 2 === 0;
-      if (isHexData) {
+      if (isHexData || previewHint) {
         return <ResourceDataEditor
-          fourCC={fieldPath}
+          fourCC={previewHint === "pict" ? "PICT" : previewHint === "icon" ? "ICN#" : fieldPath}
           resourceId={resourceId}
           hex={editValue}
           onChange={saveHexEdit}
@@ -558,6 +540,16 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
           </div>
         </div>
       );
+    }
+
+    if (previewHint && typeof value === "string" && /^[0-9a-fA-F]*$/.test(value) && value.length % 2 === 0) {
+      return <ResourceDataEditor
+        fourCC={previewHint === "pict" ? "PICT" : previewHint === "icon" ? "ICN#" : fieldPath}
+        resourceId={resourceId}
+        hex={value}
+        onChange={(nextHex) => saveFieldValue(fourCC, resourceId, fieldPath, value, nextHex)}
+        readOnly={readOnly}
+      />;
     }
 
     if (value === null) {
@@ -745,7 +737,7 @@ export default function DataBrowser({ data, onDataChange, onResourceDataChange, 
     }
 
     return <span className="text-gray-400">{String(value)}</span>;
-  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, saveHexEdit, cancelEdit, copyToClipboard, copiedField, expandedNodes]);
+  }, [editState, editValue, editError, readOnly, startEdit, saveEdit, saveHexEdit, saveFieldValue, cancelEdit, copyToClipboard, copiedField, expandedNodes, fieldPreviewHints]);
 
   const totalResources = useMemo(() => {
     return filteredData.reduce((sum, item) => sum + item.resourceCount, 0);

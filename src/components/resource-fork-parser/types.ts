@@ -36,6 +36,7 @@ export interface DataTypeField {
   arrayFields?: ArrayFieldSpec[];
   isPadding?: boolean; // True for padding bytes (x, 2x, 40x) - description should be empty/disabled
   isExpandedGroup?: boolean; // True for fields originally in Ni format with N separate names
+  preview?: "none" | "hex" | "pict" | "icon";
 }
 
 export interface FourLetterCodeSpec {

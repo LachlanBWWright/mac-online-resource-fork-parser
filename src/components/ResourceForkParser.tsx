@@ -1256,6 +1256,18 @@ export default function ResourceForkParser() {
   // Extract data for DataBrowser (avoiding unknown type in JSX)
   const browserData = parsedResult?.data as Record<string, unknown> | undefined;
 
+  const fieldPreviewHints = useMemo(() => {
+    const hints: Record<string, "hex" | "pict" | "icon"> = {};
+    for (const spec of fourLetterCodes) {
+      for (const field of spec.dataTypes) {
+        if (field.preview && field.preview !== "none" && field.description) {
+          hints[`${spec.fourCC}:${field.description}`] = field.preview;
+        }
+      }
+    }
+    return hints;
+  }, [fourLetterCodes]);
+
   const fileName = currentFile?.name || parsedResult?.filename || 'Resource Fork';
 
   const clearLoadedFile = () => {
@@ -1612,6 +1624,7 @@ export default function ResourceForkParser() {
         {viewMode === "data" && parsedResult?.success && browserData && (
           <DataBrowser 
             data={browserData}
+            fieldPreviewHints={fieldPreviewHints}
             onDataChange={handleDataChange}
             onResourceDataChange={handleResourceDataChange}
             onResourceNameChange={handleResourceNameChange}

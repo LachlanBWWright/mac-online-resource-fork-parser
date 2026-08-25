@@ -240,6 +240,23 @@ test.describe('Resource fork parser user journeys', () => {
     await expect(resource.getByText('(Renamed header)', { exact: true })).toBeVisible();
   });
 
+  test('allows a named field to opt into a visual preview format', async ({ page }) => {
+    await loadSampleWithSpecs(page);
+    await page.getByRole('button', { name: /^alis\b/ }).click();
+    const alisSpec = page.getByTestId('flc-section-alis');
+    await expect(alisSpec).toBeVisible();
+    const previewSelect = alisSpec.getByRole('combobox', { name: 'Preview format for alias_data' });
+    await previewSelect.click();
+    await page.getByRole('option', { name: 'QuickDraw PICT' }).click();
+
+    await page.getByRole('tab', { name: /Browse Data/ }).click();
+    const browser = page.getByTestId('data-browser');
+    await browser.getByPlaceholder('Search fields, values, IDs…').fill('alias_data');
+    await browser.getByRole('button', { name: /Expand fields in alis resource/ }).first().click();
+    await browser.getByText('Object (1 fields)', { exact: true }).first().click();
+    await expect(browser.getByText('QuickDraw picture renderer')).toBeVisible({ timeout: 30_000 });
+  });
+
   test('exports JSON, TypeScript, specifications, and the packed resource fork', async ({ page }) => {
     await loadSampleWithSpecs(page);
 
