@@ -287,4 +287,18 @@ test.describe('Resource fork parser user journeys', () => {
     await browseButton.scrollIntoViewIfNeeded();
     await expect(browseButton).toBeVisible();
   });
+
+  test('keeps the loaded toolbar usable with a long filename', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.locator('input[type="file"][accept=".rsrc"]').setInputFiles(
+      path.resolve('public/test-files/opensource/Retro68-SystemExtension.rsrc'),
+    );
+
+    await expect(page.getByText('Retro68-SystemExtension.rsrc')).toBeVisible({ timeout: 30_000 });
+    const toolbar = page.getByTestId('loaded-file-toolbar');
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar.getByRole('button', { name: 'Convert JSON to RSRC' })).toBeVisible();
+    const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+    expect(fitsViewport).toBe(true);
+  });
 });

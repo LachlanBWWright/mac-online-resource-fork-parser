@@ -1390,10 +1390,11 @@ export default function ResourceForkParser() {
             <>
               <div className="border-b border-gray-800/80 py-2">
                 <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "specs" | "data")}>
-                  <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-                    <div className="flex shrink-0 items-center gap-2 pr-1">
+                  <div data-testid="loaded-file-toolbar" className="space-y-2 pb-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-gray-800/70 pb-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 pr-1">
                       <FileText className="h-4 w-4 shrink-0 text-gray-400" />
-                      <span className="max-w-[min(34vw,26rem)] truncate text-sm font-semibold text-white" title={fileName}>{fileName}</span>
+                      <span className="min-w-0 truncate text-sm font-semibold text-white" title={fileName}>{fileName}</span>
                       {hasUnsavedChanges && <span className="shrink-0 text-[11px] text-yellow-400">modified</span>}
                       <Button
                         variant="ghost"
@@ -1417,8 +1418,9 @@ export default function ResourceForkParser() {
                         Browse Data
                       </TabsTrigger>
                     </TabsList>
+                    </div>
 
-                    <div className="ml-auto flex shrink-0 items-center gap-1 [&_button]:shrink-0">
+                    <div className="flex w-full flex-wrap items-center gap-1 [&_button]:shrink-0">
                       <div className="flex items-center gap-1">
                         {/* Spec management */}
                   <Input

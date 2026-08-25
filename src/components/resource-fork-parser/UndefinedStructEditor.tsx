@@ -509,6 +509,38 @@ export default function UndefinedStructEditor({
         ))}
       </div>
 
+      <div className="flex items-center gap-2">
+        <Button
+          onClick={handleAddField}
+          variant="outline"
+          size="sm"
+          className="flex-1"
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add Field
+        </Button>
+        <Button
+          onClick={() => {
+            const newId = (fields.length + 1).toString();
+            setFields([
+              ...fields,
+              {
+                id: newId,
+                type: "x",
+                count: 1,
+                description: "",
+                isPadding: true,
+              },
+            ]);
+          }}
+          variant="outline"
+          size="sm"
+          className="border-gray-600"
+        >
+          Add Padding
+        </Button>
+      </div>
+
       <div className="space-y-1 rounded bg-gray-900/70 p-3">
         <div className="flex items-center justify-between text-xs text-gray-400">
           <span>Byte layout preview</span>
@@ -543,38 +575,6 @@ export default function UndefinedStructEditor({
           <span>spec end {Math.max(currentStructSize - 1, 0)}</span>
           <span>data end {dataSize - 1}</span>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          onClick={handleAddField}
-          variant="outline"
-          size="sm"
-          className="flex-1"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Add Field
-        </Button>
-        <Button
-          onClick={() => {
-            const newId = (fields.length + 1).toString();
-            setFields([
-              ...fields,
-              {
-                id: newId,
-                type: "x",
-                count: 1,
-                description: "",
-                isPadding: true,
-              },
-            ]);
-          }}
-          variant="outline"
-          size="sm"
-          className="border-gray-600"
-        >
-          Add Padding
-        </Button>
       </div>
 
       <div className="flex items-center gap-2">
