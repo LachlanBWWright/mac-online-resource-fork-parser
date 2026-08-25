@@ -255,6 +255,9 @@ test.describe('Resource fork parser user journeys', () => {
     await browser.getByRole('button', { name: /Expand fields in alis resource/ }).first().click();
     await browser.getByText('Object (1 fields)', { exact: true }).first().click();
     await expect(browser.getByText('QuickDraw picture renderer')).toBeVisible({ timeout: 30_000 });
+    await browser.getByRole('button', { name: /Expand fields in alis resource/ }).nth(1).click();
+    await browser.getByText('Object (1 fields)', { exact: true }).nth(1).click();
+    await expect(browser.getByText('QuickDraw picture renderer')).toHaveCount(2);
   });
 
   test('exports JSON, TypeScript, specifications, and the packed resource fork', async ({ page }) => {

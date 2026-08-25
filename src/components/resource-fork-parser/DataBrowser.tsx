@@ -1061,7 +1061,10 @@ export default function DataBrowser({ data, fieldPreviewHints = {}, onDataChange
                               </div>
                             )}
 
-                            {resource.data && onResourceDataChange && selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId && (
+                            {resource.data && onResourceDataChange && (
+                              selectedResource?.fourCC === fourCC && selectedResource.resourceId === resourceId ||
+                              (isExpanded && SPECIALIZED_DATA_EDITOR_TYPES.has(fourCC))
+                            ) && (
                               <ResourceDataEditor
                                 fourCC={fourCC}
                                 resourceId={resourceId}

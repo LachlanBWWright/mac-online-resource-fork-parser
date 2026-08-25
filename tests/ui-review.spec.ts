@@ -40,6 +40,8 @@ test.describe('visual review captures', () => {
     const firstPict = page.locator('[data-testid^="resource-PICT-"]').first();
     await firstPict.click();
     await expect(page.getByText('QuickDraw picture renderer').first()).toBeVisible();
+    await page.locator('[data-testid^="resource-PICT-"]').nth(1).click();
+    await expect(page.getByText('QuickDraw picture renderer')).toHaveCount(2);
     const canvas = page.getByLabel(/Rendered QuickDraw picture PICT/).first();
     await expect(canvas).toBeVisible();
     await expect.poll(() => canvas.evaluate((element) => ({ width: (element as HTMLCanvasElement).width, height: (element as HTMLCanvasElement).height }))).toEqual({ width: 512, height: 342 });
