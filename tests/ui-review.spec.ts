@@ -42,6 +42,11 @@ test.describe('visual review captures', () => {
     await expect(page.getByText('QuickDraw picture renderer').first()).toBeVisible();
     await page.locator('[data-testid^="resource-PICT-"]').nth(1).click();
     await expect(page.getByText('QuickDraw picture renderer')).toHaveCount(2);
+    await page.getByRole('button', { name: '2×' }).first().click();
+    await expect.poll(() => page.getByLabel(/Rendered QuickDraw picture PICT/).first().evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(512);
+    const pngDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export PNG' }).first().click();
+    expect((await pngDownload).suggestedFilename()).toMatch(/PICT-\d+\.png/);
     const canvas = page.getByLabel(/Rendered QuickDraw picture PICT/).first();
     await expect(canvas).toBeVisible();
     await expect.poll(() => canvas.evaluate((element) => ({ width: (element as HTMLCanvasElement).width, height: (element as HTMLCanvasElement).height }))).toEqual({ width: 512, height: 342 });

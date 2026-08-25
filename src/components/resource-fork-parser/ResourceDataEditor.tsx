@@ -163,6 +163,10 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
   const isText = TEXT_TYPES.has(fourCC);
   const isPict = PICT_TYPES.has(fourCC);
   const [pictError, setPictError] = useState("");
+  const [pictZoom, setPictZoom] = useState(1);
+  const [pictPixel, setPictPixel] = useState<{ x: number; y: number; color: string } | null>(null);
+  const [iconZoom, setIconZoom] = useState(8);
+  const [iconGrid, setIconGrid] = useState(true);
 
   useEffect(() => setDraft(hex), [hex]);
 
@@ -172,7 +176,7 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
   useEffect(() => {
     if (!canvasRef.current || !isIcon || !bytes || !dimensions) return;
     const canvas = canvasRef.current;
-    const scale = 8;
+    const scale = iconZoom;
     canvas.width = dimensions.width * scale;
     canvas.height = dimensions.height * scale;
     const context = canvas.getContext("2d");
@@ -190,8 +194,13 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
       const shade = monochrome ? (value & position.mask ? "#f9fafb" : "#374151") : `hsl(${(value * 23) % 360} 75% ${value === 0 ? 18 : 60}%)`;
       context.fillStyle = shade;
       context.fillRect(x * scale, y * scale, scale, scale);
+      if (iconGrid && scale >= 6) {
+        context.strokeStyle = "#111827";
+        context.lineWidth = 1;
+        context.strokeRect(x * scale + 0.5, y * scale + 0.5, scale - 1, scale - 1);
+      }
     }
-  }, [bytes, dimensions, fourCC, isIcon]);
+  }, [bytes, dimensions, fourCC, iconGrid, iconZoom, isIcon]);
 
   useEffect(() => {
     if (!isPict || !bytes || !pictCanvasRef.current) return;
@@ -223,6 +232,24 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
     else if (fourCC.endsWith("4")) next[position.byte] = (next[position.byte] & (x % 2 === 0 ? 0x0f : 0xf0)) | (x % 2 === 0 ? 0xf0 : 0x0f);
     else next[position.byte] = (next[position.byte] + 1) & 0xff;
     onChange(hexFromBytes(next));
+  };
+
+  const inspectPictPixel = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(canvas.width - 1, Math.floor(((event.clientX - rect.left) / rect.width) * canvas.width)));
+    const y = Math.max(0, Math.min(canvas.height - 1, Math.floor(((event.clientY - rect.top) / rect.height) * canvas.height)));
+    const color = canvas.getContext("2d")?.getImageData(x, y, 1, 1).data;
+    if (color) setPictPixel({ x, y, color: `#${Array.from(color.slice(0, 3), (channel) => channel.toString(16).padStart(2, "0")).join("").toUpperCase()}` });
+  };
+
+  const exportPictPng = () => {
+    const canvas = pictCanvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = `${fourCC.trim() || "PICT"}-${resourceId}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
   };
 
   if (isText) {
@@ -263,17 +290,17 @@ export default function ResourceDataEditor({ fourCC, resourceId, hex, onChange, 
   }
 
   if (isPict) return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
-    <div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-wide text-gray-400">QuickDraw picture renderer</span><span className="text-xs text-gray-500">{fourCC} · #{resourceId}</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-gray-300">QuickDraw picture renderer/editor</div><span className="text-xs text-gray-500">{fourCC} · #{resourceId}</span></div><div className="flex items-center gap-1"><span className="mr-1 text-xs text-gray-500">Zoom</span>{[1, 2, 4].map((zoom) => <Button key={zoom} size="sm" variant={pictZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setPictZoom(zoom)}>{zoom}×</Button>)}<Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportPictPng}>Export PNG</Button></div></div>
     <div className="overflow-auto border border-gray-600 bg-[linear-gradient(45deg,#1f2937_25%,transparent_25%),linear-gradient(-45deg,#1f2937_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1f2937_75%),linear-gradient(-45deg,transparent_75%,#1f2937_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0] p-3">
-      <canvas ref={pictCanvasRef} aria-label={`Rendered QuickDraw picture ${fourCC} ${resourceId}`} className="h-auto max-w-full" />
+      <canvas ref={pictCanvasRef} onClick={inspectPictPixel} aria-label={`Rendered QuickDraw picture ${fourCC} ${resourceId}`} className="h-auto max-w-full cursor-crosshair" style={{ imageRendering: "pixelated", width: `${pictZoom * 100}%` }} />
     </div>
-    {pictError ? <p className="text-xs text-amber-300">Preview unavailable: {pictError}. The original bytes remain editable below.</p> : <p className="text-xs text-gray-500">Decoded from the PICT raster opcodes in the resource. Drawing-only records are skipped when their bounds are known.</p>}
+    {pictError ? <p className="text-xs text-amber-300">Preview unavailable: {pictError}. The original bytes remain editable below.</p> : <p className="text-xs text-gray-500">Click the image to inspect a pixel.{pictPixel ? ` Pixel (${pictPixel.x}, ${pictPixel.y}) is ${pictPixel.color}.` : ""} The original bytes remain editable below.</p>}
     <div className="flex gap-2"><Input aria-label={`Hex data for ${fourCC} ${resourceId}`} value={draft} readOnly={readOnly} onChange={(event) => setDraft(event.target.value)} className="font-mono text-xs" />{!readOnly && <Button size="sm" onClick={() => commit(draft)}>Apply hex</Button>}</div>
     {error && <p className="text-xs text-red-400">{error}</p>}
   </div>;
 
   if (isIcon) return <div className="space-y-3 border border-gray-700 bg-gray-900/60 p-3">
-    <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bitmap editor</span><span className="text-xs text-gray-500">{dimensions?.width}×{dimensions?.height} · {fourCC}</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><span className="text-xs font-semibold uppercase tracking-wide text-gray-300">Bitmap icon editor</span><span className="ml-2 text-xs text-gray-500">{dimensions?.width}×{dimensions?.height} · {fourCC}</span></div><div className="flex items-center gap-1"><span className="text-xs text-gray-500">Zoom</span>{[4, 8, 12].map((zoom) => <Button key={zoom} size="sm" variant={iconZoom === zoom ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconZoom(zoom)}>{zoom}×</Button>)}<Button size="sm" variant={iconGrid ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setIconGrid((current) => !current)}>Grid</Button></div></div>
     <canvas ref={canvasRef} onClick={editPixel} aria-label={`Edit ${fourCC} bitmap ${resourceId}`} className="h-auto max-w-full cursor-crosshair border border-gray-600 bg-gray-950" />
     {!readOnly && <p className="text-xs text-gray-500">Click pixels to toggle monochrome values or cycle indexed color values.</p>}
     <div className="flex gap-2"><Input aria-label={`Hex data for ${fourCC} ${resourceId}`} value={draft} readOnly={readOnly} onChange={(event) => setDraft(event.target.value)} className="font-mono text-xs" />{!readOnly && <Button size="sm" onClick={() => commit(draft)}>Apply hex</Button>}</div>
