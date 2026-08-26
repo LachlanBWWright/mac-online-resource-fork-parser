@@ -44,7 +44,9 @@ async function driveParserStory(page: import("@playwright/test").Page, storyId: 
     }
     const pictType = page.getByTestId("resource-type-PICT");
     if ((await pictType.getAttribute("aria-label"))?.startsWith("Expand")) await click(pictType);
-    await click(page.locator('[data-testid^="resource-PICT-"]').first());
+    const firstPict = page.locator('[data-testid^="resource-PICT-"]').first();
+    await expect(firstPict).toBeVisible({ timeout: 30_000 });
+    await click(firstPict);
   } else if (storyId.endsWith("struct-specifications--defined-struct-editing")) {
     const specSection = page.getByTestId("flc-section-Hedr");
     await click(specSection.locator('button[aria-label^="Edit four-letter code"]').first());
